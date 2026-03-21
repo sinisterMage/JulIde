@@ -6,6 +6,7 @@ import { useIdeStore } from "../../stores/useIdeStore";
 import { registerJuliaLanguage } from "./juliaLanguage";
 import { lspClient } from "../../lsp/LspClient";
 import { registerJuliaLspProviders, setMonacoInstance } from "../../lsp/juliaProviders";
+import { PTY_SESSION_ID } from "../../constants";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -132,6 +133,13 @@ export function MonacoEditor() {
       try {
         await invoke("fs_write_file", { path, content });
         markTabSaved(tabId);
+        // Trigger Revise.jl hot-reload if enabled
+        if (useIdeStore.getState().reviseEnabled && path.endsWith(".jl")) {
+          invoke("pty_write", {
+            sessionId: PTY_SESSION_ID,
+            data: "Revise.revise()\n",
+          }).catch(console.error);
+        }
       } catch (e) {
         console.error("Save failed:", e);
       }

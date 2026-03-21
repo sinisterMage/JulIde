@@ -138,6 +138,29 @@ pub async fn julia_list_environments() -> Result<Vec<String>, String> {
     Ok(envs)
 }
 
+/// Julia code prepended to every `julia_run` invocation.
+/// Registers a custom AbstractDisplay that intercepts rich MIME types
+/// (images, SVG, HTML) and emits them as `%%JULIDE_MIME%%{...}%%` lines on
+/// stdout so the OutputPanel can render them inline.
+const MIME_HELPER: &str = r#"
+using Base64
+struct _JulIDEMIMEDisplay_ <: AbstractDisplay end
+function Base.display(d::_JulIDEMIMEDisplay_, x)
+    for mime in (MIME("image/png"), MIME("image/svg+xml"), MIME("text/html"), MIME("image/jpeg"))
+        if showable(mime, x)
+            buf = IOBuffer()
+            show(buf, mime, x)
+            data = base64encode(take!(buf))
+            println(stdout, string("%%JULIDE_MIME%%{\"type\":\"", string(mime), "\",\"data\":\"", data, "\"}%%"))
+            flush(stdout)
+            return
+        end
+    end
+    throw(MethodError(display, (d, x)))
+end
+pushdisplay(_JulIDEMIMEDisplay_())
+"#;
+
 #[tauri::command]
 pub async fn julia_run(
     app: tauri::AppHandle,
@@ -152,11 +175,15 @@ pub async fn julia_run(
         .await
         .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
 
+    // Build an inline script: MIME helper + include(user_file).
+    // Using -e preserves @__FILE__ inside the included file.
+    let script = format!("{}\ninclude({:?})", MIME_HELPER, file_path);
+
     let mut cmd = tokio::process::Command::new(&julia);
     if let Some(ref proj) = project_path {
         cmd.arg(format!("--project={}", proj));
     }
-    cmd.arg(&file_path);
+    cmd.arg("-e").arg(&script);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);

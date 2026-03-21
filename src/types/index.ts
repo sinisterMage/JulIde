@@ -19,6 +19,8 @@ export interface OutputLine {
   kind: "stdout" | "stderr" | "info" | "done";
   text: string;
   timestamp: number;
+  /** Rich MIME content (images, HTML, SVG) from Julia display() calls. */
+  mime?: { type: string; data: string };
 }
 
 export interface Problem {

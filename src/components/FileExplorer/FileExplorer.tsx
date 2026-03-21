@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Check,
   X,
+  BookOpen,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useIdeStore } from "../../stores/useIdeStore";
@@ -101,6 +102,15 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
     } catch (e) {
       console.error("Delete failed:", e);
     }
+  };
+
+  const handleOpenAsPluto = () => {
+    closeMenu();
+    const workspacePath = useIdeStore.getState().workspacePath;
+    invoke("pluto_open", {
+      notebookPath: node.path,
+      workspacePath: workspacePath ?? null,
+    }).catch(console.error);
   };
 
   const handleNewFile = () => {
@@ -245,6 +255,14 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
             <button onClick={handleDelete} className="danger">
               <Trash2 size={13} /> Delete
             </button>
+            {!node.is_dir && node.name.endsWith(".jl") && (
+              <>
+                <div className="context-menu-separator" />
+                <button onClick={handleOpenAsPluto}>
+                  <BookOpen size={13} /> Open as Pluto Notebook
+                </button>
+              </>
+            )}
           </div>
         </>
       )}

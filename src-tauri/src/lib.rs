@@ -2,6 +2,7 @@ mod debugger;
 mod fs;
 mod julia;
 mod lsp;
+mod pluto;
 mod pty;
 
 use julia::new_julia_state;
@@ -57,6 +58,9 @@ pub fn run() {
             lsp::lsp_send_request,
             lsp::lsp_send_notification,
             lsp::lsp_send_response,
+            // Pluto
+            pluto::pluto_open,
+            pluto::pluto_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

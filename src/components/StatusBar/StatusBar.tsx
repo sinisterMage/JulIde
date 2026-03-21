@@ -11,6 +11,9 @@ export function StatusBar() {
   const activeTabId = useIdeStore((s) => s.activeTabId);
   const lspStatus = useIdeStore((s) => s.lspStatus);
   const lspErrorMessage = useIdeStore((s) => s.lspErrorMessage);
+  const reviseEnabled = useIdeStore((s) => s.reviseEnabled);
+  const plutoStatus = useIdeStore((s) => s.plutoStatus);
+  const plutoMessage = useIdeStore((s) => s.plutoMessage);
   const setJuliaVersion = useIdeStore((s) => s.setJuliaVersion);
   const setAvailableEnvs = useIdeStore((s) => s.setAvailableEnvs);
 
@@ -53,6 +56,32 @@ export function StatusBar() {
           </span>
         )}
         <span className="status-item status-encoding">UTF-8</span>
+        {reviseEnabled && (
+          <span
+            className="status-item status-revise"
+            title="Revise.jl hot-reload active"
+          >
+            Rev ●
+          </span>
+        )}
+        {plutoStatus !== "off" && (
+          <span
+            className={`status-item status-pluto status-pluto-${plutoStatus}`}
+            title={
+              plutoStatus === "error"
+                ? (plutoMessage ?? "Pluto error")
+                : plutoStatus === "ready"
+                ? (plutoMessage ?? "Pluto running")
+                : "Pluto starting…"
+            }
+          >
+            {plutoStatus === "starting"
+              ? "Pluto…"
+              : plutoStatus === "ready"
+              ? "Pluto ●"
+              : "Pluto ✕"}
+          </span>
+        )}
         <span
           className={`status-item status-lsp status-lsp-${lspStatus}`}
           title={

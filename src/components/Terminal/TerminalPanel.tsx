@@ -7,8 +7,20 @@ import { invoke } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 import { useIdeStore } from "../../stores/useIdeStore";
 import type { PtyOutputEvent } from "../../types";
+import { PTY_SESSION_ID } from "../../constants";
 
-const SESSION_ID = "main-terminal";
+const SESSION_ID = PTY_SESSION_ID;
+
+/** Send `using Revise\n` after a delay to give the REPL time to start. */
+function injectRevise(delayMs = 2500) {
+  setTimeout(() => {
+    if (useIdeStore.getState().reviseEnabled) {
+      invoke("pty_write", { sessionId: SESSION_ID, data: "using Revise\n" }).catch(
+        console.error
+      );
+    }
+  }, delayMs);
+}
 
 export function TerminalPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +92,7 @@ export function TerminalPanel() {
           juliaPath: null,
           projectPath: workspacePath ?? null,
         });
+        injectRevise();
       } catch (e) {
         term.writeln(`\x1b[31mFailed to start Julia REPL: ${e}\x1b[0m`);
         term.writeln(`\x1b[33mMake sure Julia is installed and on your PATH.\x1b[0m`);
@@ -137,8 +150,16 @@ export function TerminalPanel() {
           projectPath: workspacePath,
         })
       )
+      .then(() => injectRevise())
       .catch(console.error);
   }, [workspacePath]);
+
+  // Inject `using Revise` whenever the toggle is turned on mid-session
+  const reviseEnabled = useIdeStore((s) => s.reviseEnabled);
+  useEffect(() => {
+    if (!reviseEnabled || !termRef.current) return;
+    injectRevise(500);
+  }, [reviseEnabled]);
 
   return (
     <div className="terminal-panel">

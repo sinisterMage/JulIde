@@ -73,6 +73,15 @@ interface IdeStore {
   // Command palette
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+
+  // Revise.jl
+  reviseEnabled: boolean;
+  setReviseEnabled: (v: boolean) => void;
+
+  // Pluto.jl
+  plutoStatus: "off" | "starting" | "ready" | "error";
+  plutoMessage: string | null;
+  setPlutoStatus: (status: "off" | "starting" | "ready" | "error", message?: string) => void;
 }
 
 let outputIdCounter = 0;
@@ -253,6 +262,22 @@ export const useIdeStore = create<IdeStore>()(
     setCommandPaletteOpen: (open) =>
       set((s) => {
         s.commandPaletteOpen = open;
+      }),
+
+    // Revise.jl
+    reviseEnabled: false,
+    setReviseEnabled: (v) =>
+      set((s) => {
+        s.reviseEnabled = v;
+      }),
+
+    // Pluto.jl
+    plutoStatus: "off",
+    plutoMessage: null,
+    setPlutoStatus: (status, message) =>
+      set((s) => {
+        s.plutoStatus = status;
+        s.plutoMessage = message ?? null;
       }),
   }))
 );

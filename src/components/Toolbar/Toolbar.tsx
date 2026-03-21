@@ -9,6 +9,8 @@ import {
   CornerDownRight,
   CornerUpLeft,
   FolderOpen,
+  RefreshCw,
+  BookOpen,
 } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import type { FileNode } from "../../types";
@@ -28,6 +30,8 @@ export function Toolbar() {
   const setJuliaEnv = useIdeStore((s) => s.setJuliaEnv);
   const setWorkspace = useIdeStore((s) => s.setWorkspace);
   const setDebugState = useIdeStore((s) => s.setDebugState);
+  const reviseEnabled = useIdeStore((s) => s.reviseEnabled);
+  const setReviseEnabled = useIdeStore((s) => s.setReviseEnabled);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -109,6 +113,17 @@ export function Toolbar() {
   const handleDebugStop = async () => {
     await invoke("debug_stop").catch(console.error);
     setDebugState({ isDebugging: false, isPaused: false });
+  };
+
+  const handleOpenPluto = async () => {
+    try {
+      await invoke("pluto_open", {
+        notebookPath: "",
+        workspacePath: workspacePath ?? null,
+      });
+    } catch (e) {
+      appendOutput({ kind: "stderr", text: `Pluto error: ${e}` });
+    }
   };
 
   const handleOpenFolder = async () => {
@@ -227,6 +242,26 @@ export function Toolbar() {
             <span>Debug</span>
           </button>
         )}
+
+        <div className="toolbar-separator" />
+
+        <button
+          className={`toolbar-btn ${reviseEnabled ? "btn-revise-on" : "btn-revise"}`}
+          onClick={() => setReviseEnabled(!reviseEnabled)}
+          title={reviseEnabled ? "Revise.jl hot-reload enabled (click to disable)" : "Enable Revise.jl hot-reload"}
+        >
+          <RefreshCw size={15} />
+          <span>Revise</span>
+        </button>
+
+        <button
+          className="toolbar-btn btn-pluto"
+          onClick={handleOpenPluto}
+          title="Open Pluto notebook server"
+        >
+          <BookOpen size={15} />
+          <span>Pluto</span>
+        </button>
       </div>
 
       <div className="toolbar-right">

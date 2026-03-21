@@ -41,6 +41,7 @@ export default function App() {
   const workspacePath = useIdeStore((s) => s.workspacePath);
   const setLspStatus = useIdeStore((s) => s.setLspStatus);
   const setProblems = useIdeStore((s) => s.setProblems);
+  const setPlutoStatus = useIdeStore((s) => s.setPlutoStatus);
   const getProblems = () => useIdeStore.getState().problems;
 
   // LSP lifecycle: start when workspace opens, stop when it closes
@@ -60,6 +61,22 @@ export default function App() {
     let unlisten: (() => void) | null = null;
     listen<{ status: string; message?: string }>("lsp-status", (e) => {
       setLspStatus(
+        e.payload.status as "off" | "starting" | "ready" | "error",
+        e.payload.message
+      );
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mirror Rust pluto-status events into the store
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<{ status: string; message?: string }>("pluto-status", (e) => {
+      setPlutoStatus(
         e.payload.status as "off" | "starting" | "ready" | "error",
         e.payload.message
       );
