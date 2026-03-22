@@ -72,9 +72,13 @@ fn find_julia_impl() -> Option<PathBuf> {
     }
     #[cfg(windows)]
     {
-        if let Ok(output) = std::process::Command::new("cmd")
-            .args(["/C", "where julia"])
-            .output()
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "where julia"]);
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        if let Ok(output) = cmd.output()
         {
             if output.status.success() {
                 // `where` may return multiple lines; take the first
@@ -190,8 +194,14 @@ pub async fn julia_get_version() -> Result<String, String> {
         .await
         .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
 
-    let output = tokio::process::Command::new(&julia)
-        .arg("--version")
+    let mut cmd = tokio::process::Command::new(&julia);
+    cmd.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let output = cmd
         .output()
         .await
         .map_err(|e| e.to_string())?;
@@ -265,6 +275,11 @@ pub async fn julia_run(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
 
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
 

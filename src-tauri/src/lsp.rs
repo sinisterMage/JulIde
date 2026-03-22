@@ -204,7 +204,8 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
         .ok_or("Julia not found. Install Julia or set JULIA_PATH.")?;
 
     // Probe: check LanguageServer.jl is available
-    let probe = tokio::process::Command::new(&julia)
+    let mut probe_cmd = tokio::process::Command::new(&julia);
+    probe_cmd
         .args([
             "--startup-file=no",
             &format!("--project={}", workspace_path),
@@ -216,7 +217,13 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
             format!("{}:@v#.#:@stdlib", workspace_path),
         )
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        probe_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let probe = probe_cmd
         .status()
         .await
         .map_err(|e| e.to_string())?;
@@ -255,6 +262,11 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
     .kill_on_drop(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
 
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
     let child_stdin = child.stdin.take().unwrap();
