@@ -23,6 +23,20 @@ pub struct Settings {
     pub terminal_font_size: u32,
     #[serde(default)]
     pub recent_workspaces: Vec<String>,
+    #[serde(default = "default_container_runtime")]
+    pub container_runtime: String,
+    #[serde(default)]
+    pub container_remote_host: String,
+    #[serde(default = "default_true")]
+    pub container_auto_detect: bool,
+    #[serde(default = "default_true")]
+    pub display_forwarding: bool,
+    #[serde(default)]
+    pub gpu_passthrough: bool,
+    #[serde(default = "default_true")]
+    pub selinux_label: bool,
+    #[serde(default = "default_true")]
+    pub persist_julia_packages: bool,
 }
 
 fn default_font_size() -> u32 { 14 }
@@ -32,6 +46,7 @@ fn default_true() -> bool { true }
 fn default_word_wrap() -> String { "off".into() }
 fn default_theme() -> String { "julide-dark".into() }
 fn default_terminal_font_size() -> u32 { 13 }
+fn default_container_runtime() -> String { "auto".into() }
 
 impl Default for Settings {
     fn default() -> Self {
@@ -45,6 +60,13 @@ impl Default for Settings {
             theme: default_theme(),
             terminal_font_size: default_terminal_font_size(),
             recent_workspaces: Vec::new(),
+            container_runtime: default_container_runtime(),
+            container_remote_host: String::new(),
+            container_auto_detect: default_true(),
+            display_forwarding: default_true(),
+            gpu_passthrough: false,
+            selinux_label: default_true(),
+            persist_julia_packages: default_true(),
         }
     }
 }

@@ -10,12 +10,12 @@ pub struct PtyOutputEvent {
     pub data: String,
 }
 
-struct PtySession {
-    writer: Box<dyn Write + Send>,
-    master: Box<dyn portable_pty::MasterPty + Send>,
+pub(crate) struct PtySession {
+    pub(crate) writer: Box<dyn Write + Send>,
+    pub(crate) master: Box<dyn portable_pty::MasterPty + Send>,
 }
 
-static PTY_SESSIONS: Lazy<Arc<Mutex<HashMap<String, PtySession>>>> =
+pub(crate) static PTY_SESSIONS: Lazy<Arc<Mutex<HashMap<String, PtySession>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 #[tauri::command]

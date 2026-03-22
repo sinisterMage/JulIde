@@ -1,4 +1,4 @@
-import { Files, Search, GitBranch, Settings } from "lucide-react";
+import { Files, Search, GitBranch, Settings, Container } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { SidebarView } from "../../types";
@@ -35,6 +35,13 @@ export function ActivityBar() {
           title="Source Control"
         >
           <GitBranch size={20} />
+        </button>
+        <button
+          className={`activity-bar-btn ${activeSidebarView === "container" ? "active" : ""}`}
+          onClick={() => toggle("container")}
+          title="Dev Containers"
+        >
+          <Container size={20} />
         </button>
       </div>
       <div className="activity-bar-bottom">

@@ -1,3 +1,4 @@
+mod container;
 mod debugger;
 mod fs;
 mod git;
@@ -87,6 +88,27 @@ pub fn run() {
             git::git_commit,
             git::git_log,
             git::git_checkout_branch,
+            // Container
+            container::container_detect_runtime,
+            container::container_set_runtime,
+            container::container_list,
+            container::container_list_images,
+            container::container_inspect,
+            container::container_start,
+            container::container_stop,
+            container::container_restart,
+            container::container_remove,
+            container::container_logs,
+            container::container_pull_image,
+            container::container_exec,
+            container::devcontainer_detect,
+            container::devcontainer_load_config,
+            container::devcontainer_up,
+            container::devcontainer_stop,
+            container::devcontainer_rebuild,
+            container::devcontainer_down,
+            container::container_pty_create,
+            container::container_julia_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4,7 +4,9 @@ import type * as Monaco from "monaco-editor";
 import type {
   ActiveBottomPanel,
   Breakpoint,
+  ContainerState,
   DebugState,
+  DevContainerConfig,
   EditorTab,
   FileNode,
   OutputLine,
@@ -118,6 +120,25 @@ interface IdeStore {
   plutoStatus: "off" | "starting" | "ready" | "error";
   plutoMessage: string | null;
   setPlutoStatus: (status: "off" | "starting" | "ready" | "error", message?: string) => void;
+
+  // Container
+  containerState: ContainerState;
+  containerMode: boolean;
+  containerId: string | null;
+  containerName: string | null;
+  containerRuntime: string | null;
+  devcontainerDetected: boolean;
+  devcontainerConfig: DevContainerConfig | null;
+  containerLogs: OutputLine[];
+  setContainerState: (state: ContainerState) => void;
+  setContainerMode: (mode: boolean) => void;
+  setContainerId: (id: string | null) => void;
+  setContainerName: (name: string | null) => void;
+  setContainerRuntime: (runtime: string | null) => void;
+  setDevcontainerDetected: (detected: boolean) => void;
+  setDevcontainerConfig: (config: DevContainerConfig | null) => void;
+  appendContainerLog: (line: Omit<OutputLine, "id" | "timestamp">) => void;
+  clearContainerLogs: () => void;
 }
 
 let outputIdCounter = 0;
@@ -392,6 +413,59 @@ export const useIdeStore = create<IdeStore>()(
       set((s) => {
         s.plutoStatus = status;
         s.plutoMessage = message ?? null;
+      }),
+
+    // Container
+    containerState: "none",
+    containerMode: false,
+    containerId: null,
+    containerName: null,
+    containerRuntime: null,
+    devcontainerDetected: false,
+    devcontainerConfig: null,
+    containerLogs: [],
+    setContainerState: (state) =>
+      set((s) => {
+        s.containerState = state;
+      }),
+    setContainerMode: (mode) =>
+      set((s) => {
+        s.containerMode = mode;
+      }),
+    setContainerId: (id) =>
+      set((s) => {
+        s.containerId = id;
+      }),
+    setContainerName: (name) =>
+      set((s) => {
+        s.containerName = name;
+      }),
+    setContainerRuntime: (runtime) =>
+      set((s) => {
+        s.containerRuntime = runtime;
+      }),
+    setDevcontainerDetected: (detected) =>
+      set((s) => {
+        s.devcontainerDetected = detected;
+      }),
+    setDevcontainerConfig: (config) =>
+      set((s) => {
+        s.devcontainerConfig = config as any;
+      }),
+    appendContainerLog: (line) =>
+      set((s) => {
+        s.containerLogs.push({
+          id: String(outputIdCounter++),
+          timestamp: Date.now(),
+          ...line,
+        });
+        if (s.containerLogs.length > 5000) {
+          s.containerLogs.splice(0, s.containerLogs.length - 5000);
+        }
+      }),
+    clearContainerLogs: () =>
+      set((s) => {
+        s.containerLogs = [];
       }),
   }))
 );

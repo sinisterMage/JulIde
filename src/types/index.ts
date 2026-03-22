@@ -52,7 +52,7 @@ export interface DebugState {
   callStack: string[];
 }
 
-export type ActiveBottomPanel = "output" | "terminal" | "problems" | "debug" | "packages";
+export type ActiveBottomPanel = "output" | "terminal" | "problems" | "debug" | "packages" | "container-logs";
 
 export interface JuliaOutputEvent {
   kind: "stdout" | "stderr" | "done" | "error";
@@ -88,4 +88,62 @@ export interface SearchResult {
   match_text: string;
 }
 
-export type SidebarView = "files" | "search" | "git";
+export type SidebarView = "files" | "search" | "git" | "container";
+
+// ─── Container Types ─────────────────────────────────────────────────────────
+
+export type ContainerState = "none" | "building" | "starting" | "running" | "stopped" | "error";
+
+export interface ContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  state: string;
+  ports: string;
+  created: string;
+}
+
+export interface ContainerStatusEvent {
+  status: ContainerState;
+  message?: string;
+  container_id?: string;
+}
+
+export interface ContainerOutputEvent {
+  kind: "stdout" | "stderr" | "status" | "done" | "error";
+  text: string;
+  exit_code?: number;
+}
+
+export interface DevContainerConfig {
+  name?: string;
+  image?: string;
+  build?: {
+    dockerfile?: string;
+    context?: string;
+    args?: Record<string, string>;
+    target?: string;
+    cacheFrom?: string[];
+  };
+  dockerComposeFile?: string | string[];
+  service?: string;
+  workspaceFolder?: string;
+  forwardPorts?: number[];
+  initializeCommand?: string | string[];
+  onCreateCommand?: string | string[];
+  updateContentCommand?: string | string[];
+  postCreateCommand?: string | string[];
+  postStartCommand?: string | string[];
+  postAttachCommand?: string | string[];
+  remoteUser?: string;
+  containerEnv?: Record<string, string>;
+  mounts?: (string | Record<string, string>)[];
+  features?: Record<string, unknown>;
+  runArgs?: string[];
+  capAdd?: string[];
+  securityOpt?: string[];
+  privileged?: boolean;
+  shutdownAction?: "none" | "stopContainer";
+  customizations?: unknown;
+}

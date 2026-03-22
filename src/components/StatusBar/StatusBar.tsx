@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useIdeStore } from "../../stores/useIdeStore";
-import { GitBranch } from "lucide-react";
+import { GitBranch, Container } from "lucide-react";
 
 export function StatusBar() {
   const juliaVersion = useIdeStore((s) => s.juliaVersion);
@@ -58,6 +58,23 @@ export function StatusBar() {
         {gitBranch && (
           <span className="status-item status-git" title={`Git branch: ${gitBranch}`}>
             <GitBranch size={11} /> {gitBranch}
+          </span>
+        )}
+        {useIdeStore.getState().containerMode && (
+          <span
+            className={`status-item status-container status-container-${useIdeStore.getState().containerState}`}
+            title={useIdeStore.getState().containerName ? `Container: ${useIdeStore.getState().containerName}` : "Dev Container"}
+          >
+            <Container size={11} />{" "}
+            {useIdeStore.getState().containerState === "running"
+              ? "Container"
+              : useIdeStore.getState().containerState === "building"
+              ? "Building..."
+              : useIdeStore.getState().containerState === "starting"
+              ? "Starting..."
+              : useIdeStore.getState().containerState === "error"
+              ? "Container Err"
+              : "Container"}
           </span>
         )}
       </div>

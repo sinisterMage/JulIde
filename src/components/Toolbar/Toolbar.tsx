@@ -11,6 +11,7 @@ import {
   FolderOpen,
   RefreshCw,
   BookOpen,
+  Container,
 } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import type { FileNode } from "../../types";
@@ -32,6 +33,9 @@ export function Toolbar() {
   const setDebugState = useIdeStore((s) => s.setDebugState);
   const reviseEnabled = useIdeStore((s) => s.reviseEnabled);
   const setReviseEnabled = useIdeStore((s) => s.setReviseEnabled);
+  const containerMode = useIdeStore((s) => s.containerMode);
+  const containerId = useIdeStore((s) => s.containerId);
+  const devcontainerDetected = useIdeStore((s) => s.devcontainerDetected);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -45,10 +49,18 @@ export function Toolbar() {
     setIsRunning(true);
     appendOutput({ kind: "info", text: `Running: ${activeTab.name}` });
     try {
-      await invoke("julia_run", {
-        filePath: activeTab.path,
-        projectPath: workspacePath ?? null,
-      });
+      if (containerMode && containerId) {
+        await invoke("container_julia_run", {
+          containerId,
+          filePath: activeTab.path,
+          projectPath: workspacePath ?? null,
+        });
+      } else {
+        await invoke("julia_run", {
+          filePath: activeTab.path,
+          projectPath: workspacePath ?? null,
+        });
+      }
     } catch (e) {
       appendOutput({ kind: "stderr", text: `Error: ${e}` });
       setIsRunning(false);
@@ -262,6 +274,37 @@ export function Toolbar() {
           <BookOpen size={15} />
           <span>Pluto</span>
         </button>
+
+        {devcontainerDetected && !containerMode && (
+          <>
+            <div className="toolbar-separator" />
+            <button
+              className="toolbar-btn btn-container"
+              onClick={async () => {
+                if (!workspacePath) return;
+                const { useSettingsStore: settingsStore } = await import("../../stores/useSettingsStore");
+                const s = settingsStore.getState().settings;
+                clearOutput();
+                setActiveBottomPanel("container-logs");
+                try {
+                  await invoke("devcontainer_up", {
+                    workspacePath,
+                    displayForwarding: s.displayForwarding,
+                    gpuPassthrough: s.gpuPassthrough,
+                    selinuxLabel: s.selinuxLabel,
+                    persistJuliaPackages: s.persistJuliaPackages,
+                  });
+                } catch (e) {
+                  appendOutput({ kind: "stderr", text: `Container error: ${e}` });
+                }
+              }}
+              title="Reopen in Dev Container"
+            >
+              <Container size={15} />
+              <span>Container</span>
+            </button>
+          </>
+        )}
       </div>
 
       <div className="toolbar-right">

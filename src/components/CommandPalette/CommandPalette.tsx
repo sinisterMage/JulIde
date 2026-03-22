@@ -153,6 +153,57 @@ export function CommandPalette() {
       label: "Clear Output",
       action: clearOutput,
     },
+    {
+      id: "container.reopen",
+      label: "Dev Containers: Reopen in Container",
+      action: async () => {
+        if (!workspacePath) return;
+        const { useSettingsStore: ss } = await import("../../stores/useSettingsStore");
+        const s = ss.getState().settings;
+        setActiveBottomPanel("container-logs");
+        await invoke("devcontainer_up", {
+          workspacePath,
+          displayForwarding: s.displayForwarding,
+          gpuPassthrough: s.gpuPassthrough,
+          selinuxLabel: s.selinuxLabel,
+          persistJuliaPackages: s.persistJuliaPackages,
+        }).catch((e) => console.error(e));
+      },
+    },
+    {
+      id: "container.rebuild",
+      label: "Dev Containers: Rebuild Container",
+      action: async () => {
+        if (!workspacePath) return;
+        const { useSettingsStore: ss } = await import("../../stores/useSettingsStore");
+        const s = ss.getState().settings;
+        setActiveBottomPanel("container-logs");
+        await invoke("devcontainer_rebuild", {
+          workspacePath,
+          displayForwarding: s.displayForwarding,
+          gpuPassthrough: s.gpuPassthrough,
+          selinuxLabel: s.selinuxLabel,
+          persistJuliaPackages: s.persistJuliaPackages,
+        }).catch((e) => console.error(e));
+      },
+    },
+    {
+      id: "container.stop",
+      label: "Dev Containers: Stop Container",
+      action: async () => {
+        await invoke("devcontainer_stop").catch((e) => console.error(e));
+      },
+    },
+    {
+      id: "container.logs",
+      label: "Dev Containers: Show Container Logs",
+      action: () => setActiveBottomPanel("container-logs"),
+    },
+    {
+      id: "container.panel",
+      label: "Dev Containers: Show Container Panel",
+      action: () => setActiveSidebarView("container"),
+    },
   ];
 
   const filtered = query.trim()

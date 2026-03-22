@@ -15,17 +15,19 @@ import { PackageManager } from "./components/PackageManager/PackageManager";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
 import { ActivityBar } from "./components/ActivityBar/ActivityBar";
 import { GitPanel } from "./components/Git/GitPanel";
+import { ContainerPanel } from "./components/Container/ContainerPanel";
+import { ContainerLogsPanel } from "./components/Container/ContainerLogsPanel";
 import { WelcomeScreen } from "./components/Welcome/WelcomeScreen";
 import { useSettingsStore } from "./stores/useSettingsStore";
 import { useIdeStore } from "./stores/useIdeStore";
 import { lspClient } from "./lsp/LspClient";
 import { setMonacoMarkers } from "./lsp/juliaProviders";
 import type { LspPublishDiagnosticsParams } from "./lsp/LspClient";
-import type { Problem } from "./types";
+import type { ContainerOutputEvent, ContainerState, ContainerStatusEvent, DevContainerConfig, Problem } from "./types";
 import "./App.css";
 
 
-type PanelId = "output" | "terminal" | "problems" | "debug" | "packages";
+type PanelId = "output" | "terminal" | "problems" | "debug" | "packages" | "container-logs";
 
 const PANEL_LABELS: Record<PanelId, string> = {
   output: "Output",
@@ -33,6 +35,7 @@ const PANEL_LABELS: Record<PanelId, string> = {
   problems: "Problems",
   debug: "Debug",
   packages: "Packages",
+  "container-logs": "Container",
 };
 
 export default function App() {
@@ -150,6 +153,61 @@ export default function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Mirror container-status events into the store
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<ContainerStatusEvent>("container-status", (e) => {
+      const store = useIdeStore.getState();
+      store.setContainerState(e.payload.status as ContainerState);
+      if (e.payload.container_id) store.setContainerId(e.payload.container_id);
+      if (e.payload.message) store.setContainerName(e.payload.message);
+      if (e.payload.status === "running") store.setContainerMode(true);
+      if (e.payload.status === "stopped" || e.payload.status === "none") {
+        store.setContainerMode(false);
+        store.setContainerId(null);
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mirror container-output events into the store
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<ContainerOutputEvent>("container-output", (e) => {
+      const store = useIdeStore.getState();
+      store.appendContainerLog({
+        kind: e.payload.kind as "stdout" | "stderr" | "info" | "done",
+        text: e.payload.text,
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-detect devcontainer.json when workspace opens
+  useEffect(() => {
+    if (!workspacePath) return;
+    const autoDetect = useSettingsStore.getState().settings.containerAutoDetect;
+    if (!autoDetect) return;
+    invoke<boolean>("devcontainer_detect", { workspacePath })
+      .then((detected) => {
+        useIdeStore.getState().setDevcontainerDetected(detected);
+        if (detected) {
+          invoke<DevContainerConfig>("devcontainer_load_config", { workspacePath })
+            .then((config) => useIdeStore.getState().setDevcontainerConfig(config))
+            .catch(() => {});
+        }
+      })
+      .catch(() => useIdeStore.getState().setDevcontainerDetected(false));
+  }, [workspacePath]);
+
   // Route LSP publishDiagnostics notifications to the store and Monaco markers
   useEffect(() => {
     const unsubscribe = lspClient.onNotification((method, params) => {
@@ -240,7 +298,7 @@ export default function App() {
     };
   }, [setBottomPanelHeight, setSidebarWidth]);
 
-  const panels: PanelId[] = ["output", "terminal", "problems", "debug", "packages"];
+  const panels: PanelId[] = ["output", "terminal", "problems", "debug", "packages", "container-logs"];
 
   const currentTheme = useSettingsStore((s) => s.settings.theme);
   const themeClass = currentTheme === "julide-light" ? "theme-light" : "theme-dark";
@@ -263,6 +321,7 @@ export default function App() {
         {activeSidebarView === "files" && <FileExplorer />}
         {activeSidebarView === "search" && <SearchPanel />}
         {activeSidebarView === "git" && <GitPanel />}
+        {activeSidebarView === "container" && <ContainerPanel />}
       </div>
 
       {/* Sidebar resize handle */}
@@ -312,6 +371,7 @@ export default function App() {
             {activeBottomPanel === "problems" && <ProblemsPanel />}
             {activeBottomPanel === "debug" && <DebugPanel />}
             {activeBottomPanel === "packages" && <PackageManager />}
+            {activeBottomPanel === "container-logs" && <ContainerLogsPanel />}
           </div>
         </div>
       </div>

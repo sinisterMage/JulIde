@@ -108,14 +108,24 @@ export function TerminalPanel() {
       const sessionId = session.id;
       const setup = async () => {
         try {
-          await invoke("pty_create", {
-            sessionId,
-            juliaPath: null,
-            projectPath: workspacePath ?? null,
-          });
-          injectRevise(sessionId);
+          const storeState = useIdeStore.getState();
+          if (storeState.containerMode && storeState.containerId) {
+            await invoke("container_pty_create", {
+              sessionId,
+              containerId: storeState.containerId,
+              command: null,
+              workingDir: null,
+            });
+          } else {
+            await invoke("pty_create", {
+              sessionId,
+              juliaPath: null,
+              projectPath: workspacePath ?? null,
+            });
+            injectRevise(sessionId);
+          }
         } catch (e) {
-          term.writeln(`\x1b[31mFailed to start Julia REPL: ${e}\x1b[0m`);
+          term.writeln(`\x1b[31mFailed to start terminal: ${e}\x1b[0m`);
         }
 
         instance.unlisten = await listen<PtyOutputEvent>("pty-output", (event) => {

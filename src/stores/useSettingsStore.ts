@@ -12,6 +12,13 @@ export interface Settings {
   theme: string;
   terminalFontSize: number;
   recentWorkspaces: string[];
+  containerRuntime: string;
+  containerRemoteHost: string;
+  containerAutoDetect: boolean;
+  displayForwarding: boolean;
+  gpuPassthrough: boolean;
+  selinuxLabel: boolean;
+  persistJuliaPackages: boolean;
 }
 
 interface SettingsStore {
@@ -33,6 +40,13 @@ const defaultSettings: Settings = {
   theme: "julide-dark",
   terminalFontSize: 13,
   recentWorkspaces: [],
+  containerRuntime: "auto",
+  containerRemoteHost: "",
+  containerAutoDetect: true,
+  displayForwarding: true,
+  gpuPassthrough: false,
+  selinuxLabel: true,
+  persistJuliaPackages: true,
 };
 
 export const useSettingsStore = create<SettingsStore>()(
