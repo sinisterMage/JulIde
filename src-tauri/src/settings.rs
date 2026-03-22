@@ -37,9 +37,12 @@ pub struct Settings {
     pub selinux_label: bool,
     #[serde(default = "default_true")]
     pub persist_julia_packages: bool,
+    #[serde(default = "default_pluto_port")]
+    pub pluto_port: u32,
 }
 
 fn default_font_size() -> u32 { 14 }
+fn default_pluto_port() -> u32 { 3000 }
 fn default_font_family() -> String { "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace".into() }
 fn default_tab_size() -> u32 { 4 }
 fn default_true() -> bool { true }
@@ -67,6 +70,7 @@ impl Default for Settings {
             gpu_passthrough: false,
             selinux_label: default_true(),
             persist_julia_packages: default_true(),
+            pluto_port: default_pluto_port(),
         }
     }
 }

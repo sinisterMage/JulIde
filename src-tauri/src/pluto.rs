@@ -49,6 +49,7 @@ pub async fn pluto_open(
     app: tauri::AppHandle,
     notebook_path: String,
     workspace_path: Option<String>,
+    port: u32,
 ) -> Result<(), String> {
     let julia = find_julia()
         .await
@@ -77,21 +78,24 @@ pub async fn pluto_open(
         .replace('\\', "\\\\")
         .replace('"', "\\\"");
     let pluto_code = if notebook_path.is_empty() {
-        concat!(
-            "try; using Pluto; catch; ",
-            r#"error("Pluto.jl not installed. Run: using Pkg; Pkg.add(\"Pluto\")"); "#,
-            "end; ",
-            "Pluto.run(launch_browser=false, port=0)"
+        format!(
+            concat!(
+                "try; using Pluto; catch; ",
+                r#"error("Pluto.jl not installed. Run: using Pkg; Pkg.add(\"Pluto\")"); "#,
+                "end; ",
+                "Pluto.run(launch_browser=false, port={})"
+            ),
+            port
         )
-        .to_string()
     } else {
         format!(
             concat!(
                 "try; using Pluto; catch; ",
                 r#"error("Pluto.jl not installed. Run: using Pkg; Pkg.add(\"Pluto\")"); "#,
-                r#"end; Pluto.run(notebook="{}", launch_browser=false, port=0)"#
+                r#"end; Pluto.run(notebook="{}", launch_browser=false, port={})"#
             ),
-            escaped_path
+            escaped_path,
+            port
         )
     };
 

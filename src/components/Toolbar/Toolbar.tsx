@@ -14,11 +14,13 @@ import {
   Container,
 } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { usePluginStore } from "../../stores/usePluginStore";
 import { PluginPanel } from "../Plugin/PluginPanel";
 import type { FileNode } from "../../types";
 
 export function Toolbar() {
+  const plutoPort = useSettingsStore((s) => s.settings.plutoPort);
   const isRunning = useIdeStore((s) => s.isRunning);
   const debug = useIdeStore((s) => s.debug);
   const setIsRunning = useIdeStore((s) => s.setIsRunning);
@@ -135,6 +137,7 @@ export function Toolbar() {
       await invoke("pluto_open", {
         notebookPath: "",
         workspacePath: workspacePath ?? null,
+        port: plutoPort,
       });
     } catch (e) {
       appendOutput({ kind: "stderr", text: `Pluto error: ${e}` });

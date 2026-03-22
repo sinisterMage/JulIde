@@ -6,6 +6,7 @@ import { useIdeStore } from "../../stores/useIdeStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { themes } from "../../themes/themes";
 import { registerJuliaLanguage } from "./juliaLanguage";
+import { LATEX_UNICODE } from "./latexUnicode";
 import { lspClient } from "../../lsp/LspClient";
 import { registerJuliaLspProviders, setMonacoInstance } from "../../lsp/juliaProviders";
 import { PTY_SESSION_ID } from "../../constants";
@@ -95,6 +96,33 @@ export function MonacoEditor() {
         }
       }
     );
+
+    // Tab: expand LaTeX/Unicode sequences (e.g. \alpha → α)
+    editor.onKeyDown((e) => {
+      if (e.keyCode !== monaco.KeyCode.Tab) return;
+      const model = editor.getModel();
+      const position = editor.getPosition();
+      if (!model || !position) return;
+      const textBefore = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+      const match = textBefore.match(/\\[^\s\\]*$/);
+      if (!match) return;
+      const latex = match[0];
+      const unicode = LATEX_UNICODE[latex];
+      if (!unicode) return;
+      e.preventDefault();
+      e.stopPropagation();
+      editor.executeEdits("latex-completion", [
+        {
+          range: {
+            startLineNumber: position.lineNumber,
+            startColumn: position.column - latex.length,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column,
+          },
+          text: unicode,
+        },
+      ]);
+    });
 
     // ResizeObserver for layout
     if (containerRef.current) {

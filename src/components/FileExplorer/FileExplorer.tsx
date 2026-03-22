@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useIdeStore } from "../../stores/useIdeStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { FileNode } from "../../types";
 
 // Inline prompt that works in Tauri (replaces window.prompt which returns null)
@@ -107,9 +108,11 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
   const handleOpenAsPluto = () => {
     closeMenu();
     const workspacePath = useIdeStore.getState().workspacePath;
+    const plutoPort = useSettingsStore.getState().settings.plutoPort;
     invoke("pluto_open", {
       notebookPath: node.path,
       workspacePath: workspacePath ?? null,
+      port: plutoPort,
     }).catch(console.error);
   };
 

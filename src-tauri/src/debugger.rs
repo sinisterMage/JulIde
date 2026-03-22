@@ -36,7 +36,6 @@ pub struct DebugVariablesEvent {
 
 struct DebugSession {
     stdin: Box<dyn Write + Send>,
-    breakpoints: Vec<Breakpoint>,
 }
 
 static DEBUG_SESSION: Lazy<Arc<Mutex<Option<DebugSession>>>> =
@@ -86,7 +85,7 @@ pub async fn debug_start(
     let mut script = String::from("using Debugger\n");
     for bp in &bps {
         script.push_str(&format!(
-            "@bp_set(\"{}\", {})\n",
+            "Debugger.breakpoint(\"{}\", {})\n",
             bp.file.replace('\\', "\\\\"),
             bp.line
         ));
@@ -117,7 +116,6 @@ pub async fn debug_start(
         let mut session = DEBUG_SESSION.lock().unwrap();
         *session = Some(DebugSession {
             stdin: Box::new(stdin),
-            breakpoints: bps,
         });
     }
 

@@ -19,6 +19,7 @@ export interface Settings {
   gpuPassthrough: boolean;
   selinuxLabel: boolean;
   persistJuliaPackages: boolean;
+  plutoPort: number;
 }
 
 interface SettingsStore {
@@ -47,6 +48,7 @@ const defaultSettings: Settings = {
   gpuPassthrough: false,
   selinuxLabel: true,
   persistJuliaPackages: true,
+  plutoPort: 3000,
 };
 
 export const useSettingsStore = create<SettingsStore>()(

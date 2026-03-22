@@ -139,6 +139,19 @@ export function SettingsPanel() {
             </SettingRow>
           </SettingsSection>
 
+          <SettingsSection title="Julia">
+            <SettingRow label="Pluto Port">
+              <input
+                type="number"
+                className="settings-input settings-number"
+                value={settings.plutoPort}
+                min={1024}
+                max={65535}
+                onChange={(e) => updateSettings({ plutoPort: Number(e.target.value) })}
+              />
+            </SettingRow>
+          </SettingsSection>
+
           <SettingsSection title="Containers">
             <SettingRow label="Runtime">
               <select
