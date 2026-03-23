@@ -99,16 +99,34 @@ cd src-tauri && cargo build --release
 ```
 src/                          # Frontend (React + TypeScript)
 ├── components/               # React components, one folder per feature
-│   ├── Editor/               # MonacoEditor, EditorTabs, Breadcrumb, etc.
+│   ├── ActivityBar/           # Sidebar view switcher
+│   ├── CommandPalette/        # Cmd+Shift+P command search
+│   ├── Container/             # Dev container panel and container logs
+│   ├── Debugger/              # Debug panel (variables, call stack)
+│   ├── Editor/                # MonacoEditor, EditorTabs, Breadcrumb, etc.
+│   ├── FileExplorer/          # File tree with drag-and-drop
+│   ├── Git/                   # Source control panel with PRs/Issues tabs
+│   ├── OutputPanel/           # Script output with MIME rendering
+│   ├── PackageManager/        # Julia package management UI
+│   ├── Plugin/                # Plugin management panel
+│   ├── QuickOpen/             # Fuzzy file finder (Cmd+P)
+│   ├── SearchPanel/           # Global file search (Cmd+Shift+F)
+│   ├── Settings/              # Preferences panel
+│   ├── StatusBar/             # Bottom status indicators
 │   ├── Terminal/              # Multi-terminal with xterm.js
-│   ├── Git/                   # Git panel
-│   └── ...
+│   ├── Toolbar/               # Run, debug, Revise, Pluto buttons
+│   └── Welcome/               # Welcome screen with recent projects
 ├── stores/                   # Zustand state stores
-│   ├── useIdeStore.ts        # Main IDE state (tabs, panels, workspace)
-│   └── useSettingsStore.ts   # Persisted user settings
+│   ├── useIdeStore.ts        # Main IDE state (tabs, panels, workspace, container, git)
+│   ├── useSettingsStore.ts   # Persisted user settings
+│   └── usePluginStore.ts     # Plugin contribution registry (commands, panels, etc.)
 ├── lsp/                      # LSP client and Monaco providers
 ├── themes/                   # Theme definitions
-├── services/                 # Keybinding service
+├── services/                 # Keybinding service, plugin host, builtin contributions
+│   ├── keybindings.ts        # Keyboard shortcut manager
+│   ├── builtinContributions.ts # Built-in sidebar/bottom panels and commands
+│   ├── pluginHost.ts         # Plugin discovery, loading, and lifecycle
+│   └── pluginContext.ts      # Sandboxed plugin API context factory
 ├── types/                    # TypeScript interfaces
 ├── App.tsx                   # Root layout
 └── App.css                   # All styles (single file)
@@ -119,6 +137,13 @@ src-tauri/src/                # Backend (Rust)
 ├── lsp.rs                    # LSP server bridge
 ├── pty.rs                    # Terminal PTY sessions
 ├── git.rs                    # Git operations (libgit2)
+├── git_auth.rs               # PAT token storage via OS keychain
+├── git_provider.rs           # Git provider trait and dispatch commands for PRs/issues/CI
+├── git_github.rs             # GitHub REST API provider implementation
+├── git_gitlab.rs             # GitLab REST API provider implementation
+├── git_gitea.rs              # Gitea REST API provider implementation
+├── container.rs              # Docker/Podman and devcontainer management
+├── plugins.rs                # Plugin directory scanning and manifest loading
 ├── fs.rs                     # File system operations
 ├── search.rs                 # Workspace file search
 ├── watcher.rs                # File change detection
@@ -130,7 +155,7 @@ src-tauri/src/                # Backend (Rust)
 ### Key architectural decisions
 
 - **Single CSS file**: All styles are in `src/App.css` using CSS custom properties for theming. This is intentional — it keeps theming centralized and avoids CSS-in-JS overhead.
-- **Zustand stores**: State is split into `useIdeStore` (runtime state) and `useSettingsStore` (persisted settings). Zustand with Immer middleware allows mutable-style updates.
+- **Zustand stores**: State is split into `useIdeStore` (runtime state), `useSettingsStore` (persisted settings), and `usePluginStore` (plugin contribution registry). Zustand with Immer middleware allows mutable-style updates.
 - **Tauri invoke**: Frontend communicates with Rust via `invoke()` calls (JSON-RPC over IPC). Events flow from Rust to the frontend via `emit()`.
 - **No Electron**: julIDE uses Tauri 2, which bundles to ~10MB instead of ~150MB.
 
@@ -287,15 +312,19 @@ React Component
 | Terminal | `pty_write(sessionId, data)` | `pty-output` events |
 | LSP | `lsp_send_request(method, params)` | `lsp-notification` events |
 | File ops | `fs_read_file`, `fs_write_file`, etc. | Direct return values |
-| Git | `git_status`, `git_commit`, etc. | Direct return values |
+| Git | `git_status`, `git_commit`, `git_push`, etc. | Direct return values |
+| Git Providers | `git_provider_list_prs`, `git_provider_list_issues`, etc. | Direct return values (async) |
+| Container | `devcontainer_up`, `container_start`, etc. | `container-status`, `container-output` events |
+| Plugins | `plugin_scan`, `plugin_read_entry` | Direct return values |
 | File watch | `watcher_start(workspacePath)` | `fs-changed` events |
 
 ### State management
 
-- **`useIdeStore`** — Main IDE state: workspace path, open tabs, active panel, breakpoints, debug state, terminal sessions, LSP status, etc.
-- **`useSettingsStore`** — Persisted settings loaded from disk: font size, theme, tab size, recent workspaces, etc.
+- **`useIdeStore`** — Main IDE state: workspace path, open tabs, active panel, breakpoints, debug state, terminal sessions, LSP status, container state, git provider, etc.
+- **`useSettingsStore`** — Persisted settings loaded from disk: font size, theme, tab size, container runtime preferences, recent workspaces, etc.
+- **`usePluginStore`** — Plugin contribution registry: commands, sidebar panels, bottom panels, status bar items, toolbar buttons. Used by builtinContributions and third-party plugins.
 
-Both stores use Zustand with Immer middleware for immutable updates with mutable syntax.
+All stores use Zustand with Immer middleware for immutable updates with mutable syntax.
 
 ---
 

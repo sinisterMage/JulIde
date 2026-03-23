@@ -24,6 +24,7 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 - **Breadcrumb navigation** showing the file path below the tab bar
 - **Find & Replace** (Cmd/Ctrl+F, Cmd/Ctrl+H) via Monaco's built-in widget
 - Configurable font size, font family, tab size, word wrap, and minimap
+- **LaTeX to Unicode** — type `\alpha` + Tab to insert `α` (based on Julia's LaTeX symbols table)
 
 ### Language Intelligence (LSP)
 - Powered by [LanguageServer.jl](https://github.com/julia-vscode/LanguageServer.jl)
@@ -53,17 +54,38 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 - **Source control panel** — view staged, unstaged, and untracked files
 - **Stage / unstage** individual files or stage all at once
 - **Commit** with a message directly from the UI
-- **Branch display** in the status bar
-- Powered by `libgit2` (via the `git2` Rust crate) — no shell dependency
+- **Branch management** — create, delete, and switch branches from the UI
+- **Push / Pull / Fetch** — sync with remote repositories
+- **Merge** — fast-forward and normal merges with conflict detection
+- **Stash** — save, list, and pop stashed changes
+- **Ahead/Behind tracking** — see how far your branch is from the upstream
+- **GitHub / GitLab / Gitea** provider integration — browse PRs, issues, and CI status directly in the IDE
+- **Auth settings** — store personal access tokens securely via the OS keychain
+- Powered by `libgit2` (via the `git2` Rust crate) — no shell dependency for core operations
 
 ### Workspace & UI
-- **Activity bar** — switch between Explorer, Search, and Git views
+- **Activity bar** — switch between Explorer, Search, Git, Container, and Plugin views
 - **Command palette** (Cmd/Ctrl+Shift+P) with 15+ commands
 - **Settings panel** (Cmd/Ctrl+,) — configure editor, terminal, and appearance
 - **Theme support** — Dark and Light themes with full CSS variable system
 - **Welcome screen** with recent projects on startup
 - **Resizable panels** — sidebar and bottom panel with drag handles
 - **Status bar** — Julia version, environment, git branch, LSP status, Revise/Pluto indicators
+
+### Dev Container Support
+- **Auto-detect** `devcontainer.json` in the workspace and offer to build/start
+- **Docker and Podman** runtime auto-detection (with manual override in settings)
+- **Build, start, stop, rebuild, and tear down** dev containers from the UI or command palette
+- **Container panel** in the sidebar — list running containers and images, start/stop/restart/remove
+- **Container logs panel** — stream and view container output in real time
+- **Container terminal** — open a PTY session inside the running container
+- **Run Julia inside the container** — execute scripts in the dev container environment
+
+### Plugin System
+- **Plugin discovery** — automatically scans `~/.julide/plugins/` for installed plugins
+- **Plugin manifest** (`plugin.json`) — declare name, version, entry point, and contributions
+- **Plugin API** — register commands, sidebar panels, bottom panels, status bar items, and toolbar buttons
+- **Plugin panel** in the activity bar sidebar — view installed plugins and their status
 
 ---
 
@@ -129,9 +151,11 @@ julIDE
 │   │   ├── Debugger/           # Debug panel (variables, call stack)
 │   │   ├── Editor/             # Monaco editor, tabs, breadcrumb, split view
 │   │   ├── FileExplorer/       # File tree with drag-and-drop
+│   │   ├── Container/           # Dev container management panel and logs
 │   │   ├── Git/                # Source control panel
 │   │   ├── OutputPanel/        # Script output with MIME rendering
 │   │   ├── PackageManager/     # Julia package management UI
+│   │   ├── Plugin/             # Plugin management panel
 │   │   ├── QuickOpen/          # Fuzzy file finder (Cmd+P)
 │   │   ├── SearchPanel/        # Global file search (Cmd+Shift+F)
 │   │   ├── Settings/           # Preferences panel
@@ -140,7 +164,7 @@ julIDE
 │   │   ├── Toolbar/            # Run, debug, Revise, Pluto buttons
 │   │   └── Welcome/            # Welcome screen with recent projects
 │   ├── lsp/                    # LSP client and Monaco providers
-│   ├── services/               # Keybinding service
+│   ├── services/               # Keybinding service, plugin host, builtin contributions
 │   ├── stores/                 # Zustand state management
 │   ├── themes/                 # Theme definitions (dark + light)
 │   ├── types/                  # TypeScript interfaces
@@ -156,6 +180,13 @@ julIDE
 │       ├── debugger.rs         # Debugger.jl integration
 │       ├── fs.rs               # File system operations and dialogs
 │       ├── git.rs              # Git operations via libgit2
+│       ├── git_auth.rs         # PAT token storage via OS keychain (keyring)
+│       ├── git_provider.rs     # Git provider trait and commands for PRs/issues/CI
+│       ├── git_github.rs       # GitHub REST API provider implementation
+│       ├── git_gitlab.rs       # GitLab REST API provider implementation
+│       ├── git_gitea.rs        # Gitea REST API provider implementation
+│       ├── container.rs        # Docker/Podman container and devcontainer management
+│       ├── plugins.rs          # Plugin discovery and manifest loading
 │       ├── search.rs           # Workspace-wide file search
 │       ├── watcher.rs          # File change detection (notify crate)
 │       ├── settings.rs         # User settings persistence
@@ -181,6 +212,9 @@ julIDE
 | File watching | notify crate |
 | File search | walkdir + regex crates |
 | LSP | LanguageServer.jl via JSON-RPC over stdio |
+| Git provider API | reqwest (HTTP client for GitHub/GitLab/Gitea) |
+| Token storage | keyring crate (OS keychain) |
+| Container runtime | Docker / Podman CLI (auto-detected) |
 
 ---
 
@@ -215,6 +249,14 @@ Available settings:
 | `autoSave` | `true` | Auto-save on change |
 | `theme` | `julide-dark` | Color theme (`julide-dark` or `julide-light`) |
 | `terminalFontSize` | `13` | Terminal font size |
+| `containerRuntime` | `auto` | Container runtime (`auto`, `docker`, or `podman`) |
+| `containerRemoteHost` | `""` | Remote Docker/Podman host URL |
+| `containerAutoDetect` | `true` | Auto-detect devcontainer.json on workspace open |
+| `displayForwarding` | `true` | Forward X11/Wayland display into containers |
+| `gpuPassthrough` | `false` | Pass GPU devices into containers |
+| `selinuxLabel` | `true` | Apply SELinux labels to bind mounts |
+| `persistJuliaPackages` | `true` | Persist Julia packages across container rebuilds |
+| `plutoPort` | `3000` | Port for the Pluto.jl notebook server |
 
 ---
 

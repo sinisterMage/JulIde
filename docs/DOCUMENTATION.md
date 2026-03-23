@@ -21,6 +21,8 @@ Comprehensive technical documentation for julIDE — a Julia IDE built with Taur
 13. [Settings & Persistence](#13-settings--persistence)
 14. [Theming](#14-theming)
 15. [Build & Distribution](#15-build--distribution)
+16. [Dev Container Support](#16-dev-container-support)
+17. [Plugin System](#17-plugin-system)
 
 ---
 
@@ -168,7 +170,9 @@ App.tsx
 ├── Sidebar (conditional)
 │   ├── FileExplorer
 │   ├── SearchPanel
-│   └── GitPanel
+│   ├── GitPanel
+│   ├── ContainerPanel
+│   └── PluginPanel
 ├── EditorSplitContainer
 │   ├── EditorTabs
 │   ├── Breadcrumb
@@ -178,7 +182,8 @@ App.tsx
 │   ├── TerminalPanel
 │   ├── ProblemsPanel
 │   ├── DebugPanel
-│   └── PackageManager
+│   ├── PackageManager
+│   └── ContainerLogsPanel
 ├── StatusBar
 ├── CommandPalette (overlay)
 ├── QuickOpen (overlay)
@@ -203,11 +208,21 @@ Two Zustand stores with Immer middleware:
 - `lspStatus`, `reviseEnabled`, `plutoStatus` — Service status
 - `editorInstance` — Monaco editor ref for triggering actions externally
 - `commandPaletteOpen`, `quickOpenOpen` — Overlay visibility
+- `containerState`, `containerMode`, `containerId`, `containerName`, `containerRuntime` — Container runtime
+- `devcontainerDetected`, `devcontainerConfig`, `containerLogs` — Dev container state
+- `gitProvider` — Detected git provider for the current repo
 
 **`useSettingsStore`** — Persisted state:
 - `settings` — Font size, theme, tab size, word wrap, minimap, etc.
 - `loaded` — Whether settings have been loaded from disk
 - `settingsOpen` — Whether the settings panel is visible
+
+**`usePluginStore`** — Plugin contribution registry:
+- `commands` — Map of registered command contributions
+- `sidebarPanels` — Array of registered sidebar panel contributions
+- `bottomPanels` — Array of registered bottom panel contributions
+- `statusBarItems` — Array of registered status bar item contributions
+- `toolbarButtons` — Array of registered toolbar button contributions
 
 ### Key Frontend Libraries
 
@@ -216,8 +231,8 @@ Two Zustand stores with Immer middleware:
 | `@monaco-editor/react` | 4.7.0 | React wrapper for Monaco Editor |
 | `monaco-editor` | 0.55.1 | Code editor engine |
 | `@xterm/xterm` | 6.0.0 | Terminal emulator |
-| `@xterm/addon-fit` | 0.10.0 | Auto-resize terminal to container |
-| `@xterm/addon-web-links` | 0.11.0 | Clickable URLs in terminal |
+| `@xterm/addon-fit` | 0.11.0 | Auto-resize terminal to container |
+| `@xterm/addon-web-links` | 0.12.0 | Clickable URLs in terminal |
 | `zustand` | 5.0.12 | State management |
 | `immer` | 11.1.4 | Immutable state updates |
 | `lucide-react` | 0.577.0 | Icons |
@@ -236,7 +251,14 @@ Each Rust module in `src-tauri/src/` handles one domain:
 | `pty.rs` | Manage PTY sessions for the interactive terminal |
 | `debugger.rs` | Spawn Debugger.jl, send step/continue commands, parse output |
 | `fs.rs` | File tree, read/write/create/delete/rename, native dialogs |
-| `git.rs` | All git operations via libgit2 (status, stage, commit, diff, branches) |
+| `git.rs` | All git operations via libgit2 (status, stage, commit, diff, branches, remotes, stash, push, pull, fetch, merge) |
+| `git_auth.rs` | Store and retrieve PAT tokens via OS keychain (`keyring` crate) |
+| `git_provider.rs` | `GitProvider` trait, provider detection, and dispatch commands for PRs, issues, CI |
+| `git_github.rs` | GitHub REST API implementation of `GitProvider` |
+| `git_gitlab.rs` | GitLab REST API implementation of `GitProvider` |
+| `git_gitea.rs` | Gitea REST API implementation of `GitProvider` |
+| `container.rs` | Docker/Podman runtime detection, container lifecycle, devcontainer.json support |
+| `plugins.rs` | Scan `~/.julide/plugins/` for plugin manifests, read plugin entry points |
 | `search.rs` | Walk workspace tree, regex match file contents |
 | `watcher.rs` | Watch workspace for external file changes |
 | `settings.rs` | Load/save JSON settings to the platform config directory |
@@ -249,6 +271,8 @@ Each Rust module in `src-tauri/src/` handles one domain:
 - **`LSP_STATE`** — Singleton LSP process state (stdin writer, pending requests, open documents).
 - **`WATCHER`** — Singleton file watcher instance.
 - **`PLUTO_STATE`** — Singleton Pluto server process.
+- **`CONTAINER_STATE`** — Tracks active dev container ID, name, state, and runtime config.
+- **`CACHED_RUNTIME`** — Cached Docker/Podman runtime detection result.
 
 ### Cargo Dependencies
 
@@ -266,6 +290,11 @@ Each Rust module in `src-tauri/src/` handles one domain:
 | `once_cell` | 1 | Lazy static initialization |
 | `uuid` | 1 | Unique ID generation |
 | `dirs-next` | 2 | Platform config directory paths |
+| `reqwest` | 0.12 | HTTP client for git provider API calls (GitHub/GitLab/Gitea) |
+| `keyring` | 3 | OS keychain access for storing PAT tokens |
+| `url` | 2 | URL parsing for git remote URL handling |
+| `async-trait` | 0.1 | Async trait support for the `GitProvider` trait |
+| `tauri-plugin-dialog` | 2 | Native file/folder open/save dialogs |
 | `libc` | 0.2 | Unix signal handling (SIGTERM) |
 
 ---
@@ -310,6 +339,8 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `debug-variables` | `{ variables[] }` | `debugger.rs` — variable values |
 | `fs-changed` | `{ path, kind }` | `watcher.rs` — file create/modify/remove |
 | `pluto-status` | `{ status, message? }` | `pluto.rs` — Pluto server lifecycle |
+| `container-status` | `{ status, message?, container_id? }` | `container.rs` — Container state change |
+| `container-output` | `{ kind, text, exit_code? }` | `container.rs` — Container build/run/log output |
 
 ### Command Catalog
 
@@ -364,6 +395,53 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `git_commit` | `git.rs` | Commit staged changes |
 | `git_log` | `git.rs` | Get recent commit history |
 | `git_checkout_branch` | `git.rs` | Switch branches |
+| `git_remotes` | `git.rs` | List all remotes with URLs |
+| `git_remote_url` | `git.rs` | Get URL for a specific remote |
+| `git_branch_create` | `git.rs` | Create a new branch (optionally checkout) |
+| `git_branch_delete` | `git.rs` | Delete a local branch |
+| `git_merge` | `git.rs` | Merge a branch into HEAD |
+| `git_stash_save` | `git.rs` | Stash working directory changes |
+| `git_stash_list` | `git.rs` | List all stash entries |
+| `git_stash_pop` | `git.rs` | Pop a stash entry by index |
+| `git_fetch` | `git.rs` | Fetch from a remote |
+| `git_push` | `git.rs` | Push a branch to a remote |
+| `git_pull` | `git.rs` | Pull (fetch + merge) from a remote |
+| `git_ahead_behind` | `git.rs` | Count commits ahead/behind upstream |
+| `git_auth_save_token` | `git_auth.rs` | Store a PAT in the OS keychain |
+| `git_auth_get_token` | `git_auth.rs` | Retrieve a stored PAT |
+| `git_auth_remove_token` | `git_auth.rs` | Remove a stored PAT |
+| `git_auth_list_accounts` | `git_auth.rs` | List configured provider accounts |
+| `git_provider_detect` | `git_provider.rs` | Detect provider from remote URL |
+| `git_provider_repo_info` | `git_provider.rs` | Get repository metadata from provider API |
+| `git_provider_list_prs` | `git_provider.rs` | List pull/merge requests |
+| `git_provider_create_pr` | `git_provider.rs` | Create a pull/merge request |
+| `git_provider_merge_pr` | `git_provider.rs` | Merge a pull/merge request |
+| `git_provider_list_issues` | `git_provider.rs` | List issues |
+| `git_provider_create_issue` | `git_provider.rs` | Create an issue |
+| `git_provider_ci_status` | `git_provider.rs` | Get CI/CD pipeline status |
+| `plugin_get_dir` | `plugins.rs` | Get the plugins directory path |
+| `plugin_scan` | `plugins.rs` | Scan for installed plugins and return manifests |
+| `plugin_read_entry` | `plugins.rs` | Read a plugin's entry point source code |
+| `container_detect_runtime` | `container.rs` | Auto-detect Docker or Podman |
+| `container_set_runtime` | `container.rs` | Manually set container runtime |
+| `container_list` | `container.rs` | List running containers |
+| `container_list_images` | `container.rs` | List container images |
+| `container_inspect` | `container.rs` | Inspect a container (JSON) |
+| `container_start` | `container.rs` | Start a stopped container |
+| `container_stop` | `container.rs` | Stop a running container |
+| `container_restart` | `container.rs` | Restart a container |
+| `container_remove` | `container.rs` | Remove a container |
+| `container_logs` | `container.rs` | Stream container logs via events |
+| `container_pull_image` | `container.rs` | Pull a container image |
+| `container_exec` | `container.rs` | Execute a command in a container |
+| `devcontainer_detect` | `container.rs` | Check if workspace has devcontainer.json |
+| `devcontainer_load_config` | `container.rs` | Parse and return devcontainer.json |
+| `devcontainer_up` | `container.rs` | Build and start a dev container |
+| `devcontainer_stop` | `container.rs` | Stop the active dev container |
+| `devcontainer_rebuild` | `container.rs` | Rebuild and restart the dev container |
+| `devcontainer_down` | `container.rs` | Stop and remove the dev container |
+| `container_pty_create` | `container.rs` | Create a PTY session inside a container |
+| `container_julia_run` | `container.rs` | Run a Julia script inside the container |
 | `fs_search_files` | `search.rs` | Search file contents across workspace |
 | `watcher_start` | `watcher.rs` | Start watching workspace for changes |
 | `watcher_stop` | `watcher.rs` | Stop file watching |
@@ -516,12 +594,63 @@ All git operations use the `git2` Rust crate (libgit2 bindings) — no shell dep
 | Log | `git_log` | Recent commits with message, author, time |
 | Branches | `git_branches` | List local branches |
 | Checkout | `git_checkout_branch` | Switch branches |
+| Create branch | `git_branch_create` | Create a new branch (with optional checkout) |
+| Delete branch | `git_branch_delete` | Delete a local branch |
+| Merge | `git_merge` | Merge a branch (fast-forward or normal, with conflict detection) |
+| Stash save | `git_stash_save` | Save uncommitted changes to stash |
+| Stash list | `git_stash_list` | List all stash entries |
+| Stash pop | `git_stash_pop` | Apply and remove a stash entry |
+| Fetch | `git_fetch` | Fetch from a remote |
+| Push | `git_push` | Push a branch to a remote |
+| Pull | `git_pull` | Pull (fetch + fast-forward/merge) from a remote |
+| Ahead/Behind | `git_ahead_behind` | Count commits ahead/behind the upstream branch |
+| Remotes | `git_remotes` | List all remotes with URLs |
+| Remote URL | `git_remote_url` | Get the URL of a specific remote |
 
 ### Frontend
 
-- **GitPanel** shows files grouped by staged/unstaged/untracked.
-- **StatusBar** displays the current branch name.
+- **GitPanel** shows files grouped by staged/unstaged/untracked with four tabs: Changes, Branches, PRs, Issues.
+- **GitBranchesTab** — manage branches with create/delete/switch.
+- **GitPRsTab** — browse and create pull/merge requests (when a provider is detected).
+- **GitIssuesTab** — browse and create issues.
+- **GitAuthSettings** — configure PAT tokens per provider.
+- **StatusBar** displays the current branch name and ahead/behind counts.
 - Stage/unstage buttons appear on hover over each file.
+
+### Git Provider Integration (GitHub / GitLab / Gitea)
+
+The IDE supports browsing PRs, issues, and CI status for repositories hosted on GitHub, GitLab, or Gitea (including self-hosted instances).
+
+**Architecture:**
+- `git_provider.rs` defines a `GitProvider` async trait with methods for repo info, PRs, issues, and CI checks.
+- `git_github.rs`, `git_gitlab.rs`, and `git_gitea.rs` implement this trait using `reqwest` HTTP calls against each platform's REST API.
+- Provider detection is automatic based on the `origin` remote URL.
+
+**Provider Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `git_provider_detect` | Detect provider from remote URL |
+| `git_provider_repo_info` | Get repository metadata from provider API |
+| `git_provider_list_prs` | List pull/merge requests |
+| `git_provider_create_pr` | Create a pull/merge request |
+| `git_provider_merge_pr` | Merge a pull/merge request |
+| `git_provider_list_issues` | List issues |
+| `git_provider_create_issue` | Create an issue |
+| `git_provider_ci_status` | Get CI/CD pipeline status |
+
+### Authentication
+
+`git_auth.rs` uses the OS keychain (`keyring` crate) to securely store personal access tokens per provider. Tokens are used for:
+1. HTTPS push/pull/fetch operations (via `git2` credential callbacks)
+2. REST API calls to GitHub/GitLab/Gitea
+
+| Command | Description |
+|---------|-------------|
+| `git_auth_save_token` | Store a PAT in the OS keychain |
+| `git_auth_get_token` | Retrieve a stored PAT |
+| `git_auth_remove_token` | Remove a stored PAT |
+| `git_auth_list_accounts` | List configured provider accounts |
 
 ---
 
@@ -563,7 +692,15 @@ All git operations use the `git2` Rust crate (libgit2 bindings) — no shell dep
   "autoSave": true,
   "theme": "julide-dark",
   "terminalFontSize": 13,
-  "recentWorkspaces": ["/path/to/project1", "/path/to/project2"]
+  "recentWorkspaces": ["/path/to/project1", "/path/to/project2"],
+  "containerRuntime": "auto",
+  "containerRemoteHost": "",
+  "containerAutoDetect": true,
+  "displayForwarding": true,
+  "gpuPassthrough": false,
+  "selinuxLabel": true,
+  "persistJuliaPackages": true,
+  "plutoPort": 3000
 }
 ```
 
@@ -636,3 +773,143 @@ Configured in `src-tauri/tauri.conf.json`:
 - **Identifier**: com.ofek.julide
 - **Window**: 1400x900px default, 800x600px minimum
 - **Icons**: PNG (32x32, 128x128, 128x128@2x), ICNS, ICO
+
+---
+
+## 16. Dev Container Support
+
+### Overview
+
+julIDE supports the [Development Containers](https://containers.dev/) specification. When a workspace contains a `.devcontainer/devcontainer.json` file, the IDE offers to build and run a containerized development environment with Julia pre-configured.
+
+### Runtime Detection
+
+`container.rs` auto-detects Docker or Podman by searching the system PATH. The order is:
+1. Shell `which docker` / `which podman`
+2. Common binary paths (`/usr/bin/`, `/usr/local/bin/`, `/opt/homebrew/bin/`)
+3. Platform-specific paths (e.g., Docker Desktop on macOS/Windows)
+
+The detected runtime is cached. Users can override it via the `containerRuntime` setting.
+
+### DevContainer Lifecycle
+
+| Phase | Command | Description |
+|-------|---------|-------------|
+| Detect | `devcontainer_detect` | Check for `.devcontainer/devcontainer.json` |
+| Load | `devcontainer_load_config` | Parse and validate the config file |
+| Build & Start | `devcontainer_up` | Build image (if needed) and start container with mounts, ports, env vars |
+| Stop | `devcontainer_stop` | Stop the running dev container |
+| Rebuild | `devcontainer_rebuild` | Tear down, rebuild image, and restart |
+| Tear down | `devcontainer_down` | Stop and remove the dev container and associated resources |
+
+### Container Management
+
+Beyond dev containers, the IDE provides general container management:
+- **List containers** and **images** from the sidebar Container panel
+- **Start / stop / restart / remove** containers
+- **Pull images** with streamed progress output
+- **Execute commands** inside running containers
+- **Stream logs** via the Container Logs bottom panel
+
+### Container Terminal and Julia Execution
+
+- `container_pty_create` — Opens a PTY session inside a running container, connected to the IDE terminal
+- `container_julia_run` — Runs a Julia script file inside the container, streaming output via `julia-output` events
+
+### Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `containerRuntime` | `auto` | `auto`, `docker`, or `podman` |
+| `containerRemoteHost` | `""` | Remote Docker/Podman host URL (e.g., `ssh://user@host`) |
+| `containerAutoDetect` | `true` | Automatically detect devcontainer.json on workspace open |
+| `displayForwarding` | `true` | Forward X11/Wayland display into containers |
+| `gpuPassthrough` | `false` | Pass GPU devices into containers |
+| `selinuxLabel` | `true` | Apply SELinux `:z` labels to bind mounts |
+| `persistJuliaPackages` | `true` | Mount a persistent volume for Julia packages across rebuilds |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `container-status` | `{ status, message?, container_id? }` | Container state transitions (building, starting, running, stopped, error) |
+| `container-output` | `{ kind, text, exit_code? }` | Build/run output stream (stdout, stderr, done) |
+
+---
+
+## 17. Plugin System
+
+### Overview
+
+julIDE has an extensibility system that allows plugins to register commands, sidebar panels, bottom panels, status bar items, and toolbar buttons. Plugins are JavaScript modules loaded at runtime.
+
+### Plugin Directory
+
+Plugins are installed in `~/.julide/plugins/`. Each plugin lives in its own subdirectory with a `plugin.json` manifest file.
+
+```
+~/.julide/plugins/
+├── my-plugin/
+│   ├── plugin.json       # Manifest
+│   └── main.js           # Entry point
+└── another-plugin/
+    ├── plugin.json
+    └── index.js
+```
+
+### Plugin Manifest (`plugin.json`)
+
+```json
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "displayName": "My Plugin",
+  "description": "A sample plugin",
+  "author": "Author Name",
+  "main": "main.js",
+  "activationEvents": ["*"]
+}
+```
+
+### Plugin API (`PluginContext`)
+
+When a plugin is activated, it receives a `PluginContext` object with the following namespaces:
+
+| Namespace | Methods |
+|-----------|---------|
+| `commands` | `register(id, label, handler)`, `execute(id)` |
+| `ui` | `registerSidebarPanel()`, `registerBottomPanel()`, `registerStatusBarItem()`, `registerToolbarButton()`, `showNotification()` |
+| `workspace` | `getPath()`, `readFile()`, `writeFile()`, `onDidChangeFiles()` |
+| `editor` | `getActiveFilePath()`, `getSelectedText()` |
+| `ipc` | `invoke(command, args)`, `listen(event, callback)` |
+| `log` | `info()`, `warn()`, `error()` |
+
+All registrations return a `Disposable` that is automatically cleaned up when the plugin is deactivated.
+
+### Architecture
+
+```
+Plugin Discovery (pluginHost.ts)
+    │
+    ├── invoke("plugin_scan")  ──→  plugins.rs (scan ~/.julide/plugins/)
+    │
+    ├── invoke("plugin_read_entry")  ──→  Read main.js source
+    │
+    ├── Create sandbox context (pluginContext.ts)
+    │
+    └── Call plugin.activate(context)  ──→  Plugin registers contributions
+                                                │
+                                                └── usePluginStore (Zustand)
+```
+
+### Built-in Contributions
+
+`builtinContributions.ts` uses the same plugin registration API to register the IDE's built-in panels (FileExplorer, SearchPanel, GitPanel, ContainerPanel, PluginPanel) and bottom panels. This ensures a uniform architecture where built-in features and plugins use the same contribution system.
+
+### Backend Commands
+
+| Command | Description |
+|---------|-------------|
+| `plugin_get_dir` | Returns the plugins directory path (creates it if missing) |
+| `plugin_scan` | Scans for plugins and returns their manifests |
+| `plugin_read_entry` | Reads the JavaScript entry point of a plugin |
