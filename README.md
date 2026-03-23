@@ -5,6 +5,7 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Julia](https://img.shields.io/badge/Julia-1.6%2B-9558B2)
+<img width="2553" height="1353" alt="image" src="https://github.com/user-attachments/assets/29f6e9da-70d3-4e0c-a550-d85903ee63ed" />
 
 ---
 
