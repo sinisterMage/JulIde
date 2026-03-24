@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor, type BeforeMount } from "@monaco-editor/react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { themes } from "../../themes/themes";
+import { registerJuliaLanguage } from "../Editor/juliaLanguage";
 
 interface DiffViewerProps {
   filePath: string;
@@ -41,6 +43,13 @@ export function DiffViewer({ filePath, fileStatus, onClose }: DiffViewerProps) {
     });
   }, [workspacePath, filePath, fileStatus]);
 
+  const handleBeforeMount: BeforeMount = (monaco) => {
+    registerJuliaLanguage(monaco);
+    for (const [id, theme] of Object.entries(themes)) {
+      monaco.editor.defineTheme(id, theme.monacoTheme);
+    }
+  };
+
   const ext = filePath.split(".").pop()?.toLowerCase();
   const language = ext === "jl" ? "julia" : ext === "toml" ? "toml" : ext === "json" ? "json" : ext === "md" ? "markdown" : "plaintext";
 
@@ -66,6 +75,7 @@ export function DiffViewer({ filePath, fileStatus, onClose }: DiffViewerProps) {
             modified={modified}
             language={language}
             theme={settings.theme}
+            beforeMount={handleBeforeMount}
             options={{
               readOnly: true,
               fontSize: settings.fontSize,

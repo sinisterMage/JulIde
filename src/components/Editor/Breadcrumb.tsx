@@ -13,6 +13,18 @@ export function Breadcrumb() {
   const [dropdown, setDropdown] = useState<{ index: number; items: string[] } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Close dropdown on click outside — hook must be called unconditionally
+  useEffect(() => {
+    if (!dropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropdown]);
+
   const activeTab = openTabs.find((t) => t.id === activeTabId);
   if (!activeTab) return null;
 
@@ -25,11 +37,10 @@ export function Breadcrumb() {
 
   const handleSegmentClick = async (index: number) => {
     if (!workspacePath) return;
-    // Build the directory path up to this segment
     const dirSegments = segments.slice(0, index + 1);
     const dirPath = `${workspacePath}/${dirSegments.join("/")}`;
 
-    // If it's the last segment (file), do nothing (already open)
+    // If it's the last segment (file), do nothing
     if (index === segments.length - 1) return;
 
     try {
@@ -67,18 +78,6 @@ export function Breadcrumb() {
     }
     setDropdown(null);
   };
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    if (!dropdown) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdown(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [dropdown]);
 
   return (
     <div className="breadcrumb">
