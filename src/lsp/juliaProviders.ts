@@ -369,6 +369,37 @@ export function registerJuliaLspProviders(monaco: typeof Monaco): void {
       }
     },
   });
+
+  // ── Semantic Tokens ───────────────────────────────────────────────────────
+  const tokenTypes = [
+    "namespace", "type", "class", "enum", "interface",
+    "struct", "typeParameter", "parameter", "variable",
+    "property", "enumMember", "event", "function", "method",
+    "macro", "keyword", "modifier", "comment", "string",
+    "number", "regexp", "operator", "decorator",
+  ];
+  const tokenModifiers = [
+    "declaration", "definition", "readonly", "static",
+    "deprecated", "abstract", "async", "modification",
+    "documentation", "defaultLibrary",
+  ];
+
+  const legend: Monaco.languages.SemanticTokensLegend = { tokenTypes, tokenModifiers };
+
+  monaco.languages.registerDocumentSemanticTokensProvider("julia", {
+    getLegend: () => legend,
+    provideDocumentSemanticTokens: async (model) => {
+      const uri = `file://${model.uri.path}`;
+      try {
+        const result = await lspClient.getSemanticTokensFull(uri);
+        if (!result) return { data: new Uint32Array(0) };
+        return { data: new Uint32Array(result.data) };
+      } catch {
+        return { data: new Uint32Array(0) };
+      }
+    },
+    releaseDocumentSemanticTokens: () => {},
+  });
 }
 
 // ── Workspace edit conversion helper ──────────────────────────────────────────

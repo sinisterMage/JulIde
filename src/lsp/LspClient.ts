@@ -94,6 +94,30 @@ export interface LspInlayHint {
   paddingRight?: boolean;
 }
 
+export interface LspSemanticTokens {
+  resultId?: string;
+  data: number[];
+}
+
+export interface LspCallHierarchyItem {
+  name: string;
+  kind: number;
+  uri: string;
+  range: LspRange;
+  selectionRange: LspRange;
+  detail?: string;
+}
+
+export interface LspCallHierarchyIncomingCall {
+  from: LspCallHierarchyItem;
+  fromRanges: LspRange[];
+}
+
+export interface LspCallHierarchyOutgoingCall {
+  to: LspCallHierarchyItem;
+  fromRanges: LspRange[];
+}
+
 // ── Notification handler type ─────────────────────────────────────────────────
 
 export type LspNotificationHandler = (method: string, params: unknown) => void;
@@ -268,6 +292,25 @@ class LspClient {
               hierarchicalDocumentSymbolSupport: true,
             },
             inlayHint: {},
+            semanticTokens: {
+              dynamicRegistration: false,
+              requests: { full: { delta: false }, range: false },
+              tokenTypes: [
+                "namespace", "type", "class", "enum", "interface",
+                "struct", "typeParameter", "parameter", "variable",
+                "property", "enumMember", "event", "function", "method",
+                "macro", "keyword", "modifier", "comment", "string",
+                "number", "regexp", "operator", "decorator",
+              ],
+              tokenModifiers: [
+                "declaration", "definition", "readonly", "static",
+                "deprecated", "abstract", "async", "modification",
+                "documentation", "defaultLibrary",
+              ],
+              formats: ["relative"],
+              multilineTokenSupport: false,
+            },
+            callHierarchy: { dynamicRegistration: false },
           },
         },
         initializationOptions: null,
@@ -536,6 +579,49 @@ class LspClient {
       method: "textDocument/documentSymbol",
       params: { textDocument: { uri } },
     });
+  }
+
+  async getSemanticTokensFull(uri: string): Promise<LspSemanticTokens | null> {
+    if (!this._isReady || !this._openDocuments.has(uri)) return null;
+
+    return invoke<LspSemanticTokens | null>("lsp_send_request", {
+      method: "textDocument/semanticTokens/full",
+      params: { textDocument: { uri } },
+    });
+  }
+
+  async prepareCallHierarchy(
+    uri: string,
+    line: number,
+    character: number
+  ): Promise<LspCallHierarchyItem[]> {
+    if (!this._isReady || !this._openDocuments.has(uri)) return [];
+
+    const result = await invoke<LspCallHierarchyItem[] | null>("lsp_send_request", {
+      method: "textDocument/prepareCallHierarchy",
+      params: { textDocument: { uri }, position: { line, character } },
+    });
+    return result ?? [];
+  }
+
+  async callHierarchyIncomingCalls(item: LspCallHierarchyItem): Promise<LspCallHierarchyIncomingCall[]> {
+    if (!this._isReady) return [];
+
+    const result = await invoke<LspCallHierarchyIncomingCall[] | null>("lsp_send_request", {
+      method: "callHierarchy/incomingCalls",
+      params: { item },
+    });
+    return result ?? [];
+  }
+
+  async callHierarchyOutgoingCalls(item: LspCallHierarchyItem): Promise<LspCallHierarchyOutgoingCall[]> {
+    if (!this._isReady) return [];
+
+    const result = await invoke<LspCallHierarchyOutgoingCall[] | null>("lsp_send_request", {
+      method: "callHierarchy/outgoingCalls",
+      params: { item },
+    });
+    return result ?? [];
   }
 }
 

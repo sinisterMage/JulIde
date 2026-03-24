@@ -149,6 +149,109 @@ pub fn fs_search_files(
     Ok(results)
 }
 
+/// Replace all occurrences of `query` with `replacement` in workspace files.
+/// Returns the number of files modified and total replacements made.
+#[tauri::command]
+pub fn fs_replace_in_files(
+    workspace: String,
+    query: String,
+    replacement: String,
+    is_regex: bool,
+    case_sensitive: bool,
+    file_glob: Option<String>,
+) -> Result<(usize, usize), String> {
+    if query.is_empty() {
+        return Ok((0, 0));
+    }
+
+    let re = if is_regex {
+        regex::RegexBuilder::new(&query)
+            .case_insensitive(!case_sensitive)
+            .build()
+            .map_err(|e| format!("Invalid regex: {}", e))?
+    } else {
+        let escaped = regex::escape(&query);
+        regex::RegexBuilder::new(&escaped)
+            .case_insensitive(!case_sensitive)
+            .build()
+            .map_err(|e| format!("Search error: {}", e))?
+    };
+
+    let glob_pattern = file_glob.as_deref().and_then(|g| glob::Pattern::new(g).ok());
+
+    let mut files_modified = 0usize;
+    let mut total_replacements = 0usize;
+
+    for entry in WalkDir::new(&workspace)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.file_type().is_dir() {
+                let name = e.file_name().to_string_lossy();
+                if name.starts_with('.') && name != "." {
+                    return false;
+                }
+                !SKIP_DIRS.contains(&name.as_ref())
+            } else {
+                true
+            }
+        })
+    {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let path = entry.path();
+
+        if let Ok(meta) = path.metadata() {
+            if meta.len() > MAX_FILE_SIZE {
+                continue;
+            }
+        }
+
+        if let Some(ref pat) = glob_pattern {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            if !pat.matches(&name) {
+                continue;
+            }
+        }
+
+        let content = match fs::read(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        if is_likely_binary(&content) {
+            continue;
+        }
+
+        let text = match String::from_utf8(content) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        let count = re.find_iter(&text).count();
+        if count == 0 {
+            continue;
+        }
+
+        let new_text = re.replace_all(&text, replacement.as_str()).to_string();
+        if let Err(e) = fs::write(path, &new_text) {
+            return Err(format!("Failed to write {}: {}", path.display(), e));
+        }
+
+        files_modified += 1;
+        total_replacements += count;
+    }
+
+    Ok((files_modified, total_replacements))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

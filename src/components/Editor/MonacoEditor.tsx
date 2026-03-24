@@ -89,6 +89,9 @@ export function MonacoEditor() {
   const breakpoints = useIdeStore((s) => s.breakpoints);
   const toggleBreakpoint = useIdeStore((s) => s.toggleBreakpoint);
   const debug = useIdeStore((s) => s.debug);
+  const problems = useIdeStore((s) => s.problems);
+  const blameEnabled = useIdeStore((s) => s.blameEnabled);
+  const workspacePath = useIdeStore((s) => s.workspacePath);
 
   const setEditorInstance = useIdeStore((s) => s.setEditorInstance);
   const setCursorPosition = useIdeStore((s) => s.setCursorPosition);
@@ -103,6 +106,8 @@ export function MonacoEditor() {
   const debugDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
   const cellDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
   const cellResultDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const errorLensDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const blameDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const handleBeforeMount: BeforeMount = (monaco) => {
@@ -272,6 +277,8 @@ export function MonacoEditor() {
     debugDecoRef.current = editor.createDecorationsCollection([]);
     cellDecoRef.current = editor.createDecorationsCollection([]);
     cellResultDecoRef.current = editor.createDecorationsCollection([]);
+    errorLensDecoRef.current = editor.createDecorationsCollection([]);
+    blameDecoRef.current = editor.createDecorationsCollection([]);
   };
 
   const saveFile = useCallback(
@@ -332,6 +339,30 @@ export function MonacoEditor() {
     decorationsRef.current.set(decorations);
   }, [breakpoints, activeTab]);
 
+  // Update error lens decorations (inline diagnostic text at end of line)
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !errorLensDecoRef.current || !activeTab) return;
+
+    const fileProblems = problems.filter((p) => p.file === activeTab.path);
+    const decos: Monaco.editor.IModelDeltaDecoration[] = fileProblems.map((p) => ({
+      range: {
+        startLineNumber: p.line,
+        startColumn: 1,
+        endLineNumber: p.line,
+        endColumn: 1,
+      },
+      options: {
+        isWholeLine: true,
+        after: {
+          content: `  ${p.severity === "error" ? "✕" : "⚠"} ${p.message}`,
+          inlineClassName: `error-lens error-lens-${p.severity}`,
+        },
+      },
+    }));
+    errorLensDecoRef.current.set(decos);
+  }, [problems, activeTab]);
+
   // Update debug current-line decoration
   useEffect(() => {
     const editor = editorRef.current;
@@ -357,6 +388,127 @@ export function MonacoEditor() {
       debugDecoRef.current.set([]);
     }
   }, [debug.isPaused, debug.currentLine]);
+
+  // Git blame decorations
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !blameDecoRef.current || !activeTab) return;
+
+    if (!blameEnabled || !workspacePath) {
+      blameDecoRef.current.set([]);
+      return;
+    }
+
+    let relativePath = activeTab.path;
+    if (relativePath.startsWith(workspacePath)) {
+      relativePath = relativePath.slice(workspacePath.length + 1);
+    }
+
+    invoke<Array<{ line: number; author: string; date: string; commitId: string; summary: string }>>(
+      "git_blame_file",
+      { workspacePath, filePath: relativePath }
+    ).then((blameLines) => {
+      if (!blameDecoRef.current) return;
+      const decos: Monaco.editor.IModelDeltaDecoration[] = blameLines.map((b) => ({
+        range: { startLineNumber: b.line, startColumn: 1, endLineNumber: b.line, endColumn: 1 },
+        options: {
+          isWholeLine: true,
+          after: {
+            content: `  ${b.author}, ${b.date} - ${b.summary.slice(0, 40)}`,
+            inlineClassName: "git-blame-text",
+          },
+        },
+      }));
+      blameDecoRef.current.set(decos);
+    }).catch(() => {
+      blameDecoRef.current?.set([]);
+    });
+  }, [blameEnabled, activeTab?.path, workspacePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Merge conflict resolution: detect conflict markers and add action buttons
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !activeTab) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const conflicts: Array<{ ours: number; divider: number; theirs: number }> = [];
+    const lineCount = model.getLineCount();
+    let oursLine: number | null = null;
+    let dividerLine: number | null = null;
+
+    for (let i = 1; i <= lineCount; i++) {
+      const content = model.getLineContent(i);
+      if (content.startsWith("<<<<<<<")) {
+        oursLine = i;
+      } else if (content.startsWith("=======") && oursLine !== null) {
+        dividerLine = i;
+      } else if (content.startsWith(">>>>>>>") && oursLine !== null && dividerLine !== null) {
+        conflicts.push({ ours: oursLine, divider: dividerLine, theirs: i });
+        oursLine = null;
+        dividerLine = null;
+      }
+    }
+
+    if (conflicts.length === 0) return;
+
+    // Create zone widgets for conflict actions
+    const disposables: Monaco.IDisposable[] = [];
+
+    editor.changeViewZones((accessor) => {
+      for (const conflict of conflicts) {
+        const domNode = document.createElement("div");
+        domNode.className = "merge-conflict-actions";
+        domNode.innerHTML = `
+          <span class="merge-action merge-action-current" data-action="current">Accept Current</span>
+          <span class="merge-action merge-action-incoming" data-action="incoming">Accept Incoming</span>
+          <span class="merge-action merge-action-both" data-action="both">Accept Both</span>
+        `;
+        domNode.addEventListener("click", (e) => {
+          const target = e.target as HTMLElement;
+          const action = target.dataset.action;
+          if (!action) return;
+
+          const currentModel = editor.getModel();
+          if (!currentModel) return;
+
+          const oursContent: string[] = [];
+          const theirsContent: string[] = [];
+          for (let l = conflict.ours + 1; l < conflict.divider; l++) {
+            oursContent.push(currentModel.getLineContent(l));
+          }
+          for (let l = conflict.divider + 1; l < conflict.theirs; l++) {
+            theirsContent.push(currentModel.getLineContent(l));
+          }
+
+          let replacement: string;
+          if (action === "current") replacement = oursContent.join("\n");
+          else if (action === "incoming") replacement = theirsContent.join("\n");
+          else replacement = oursContent.join("\n") + "\n" + theirsContent.join("\n");
+
+          editor.executeEdits("merge-conflict", [{
+            range: {
+              startLineNumber: conflict.ours,
+              startColumn: 1,
+              endLineNumber: conflict.theirs,
+              endColumn: currentModel.getLineMaxColumn(conflict.theirs),
+            },
+            text: replacement,
+          }]);
+        });
+
+        accessor.addZone({
+          afterLineNumber: conflict.ours - 1,
+          heightInLines: 1,
+          domNode,
+        });
+      }
+    });
+
+    return () => {
+      disposables.forEach((d) => d.dispose());
+    };
+  }, [activeTab?.content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update code cell separator decorations for Julia files
   useEffect(() => {

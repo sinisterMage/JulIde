@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Search, X } from "lucide-react";
+import { Search, X, Replace } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import type { SearchResult, EditorTab } from "../../types";
 
@@ -13,6 +13,9 @@ export function SearchPanel() {
   const openFile = useIdeStore((s) => s.openFile);
 
   const [query, setQuery] = useState("");
+  const [replaceQuery, setReplaceQuery] = useState("");
+  const [showReplace, setShowReplace] = useState(false);
+  const [replaceMessage, setReplaceMessage] = useState("");
   const [useRegex, setUseRegex] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [fileFilter, setFileFilter] = useState("");
@@ -37,6 +40,26 @@ export function SearchPanel() {
       setIsSearching(false);
     }
   }, [query, workspacePath, useRegex, caseSensitive, fileFilter, setSearchResults, setIsSearching]);
+
+  const doReplace = useCallback(async () => {
+    if (!query.trim() || !workspacePath) return;
+    setReplaceMessage("");
+    try {
+      const [filesModified, totalReplacements] = await invoke<[number, number]>("fs_replace_in_files", {
+        workspace: workspacePath,
+        query,
+        replacement: replaceQuery,
+        isRegex: useRegex,
+        caseSensitive,
+        fileGlob: fileFilter || null,
+      });
+      setReplaceMessage(`Replaced ${totalReplacements} occurrences in ${filesModified} files`);
+      // Re-run search to update results
+      doSearch();
+    } catch (e) {
+      setReplaceMessage(`Replace failed: ${e}`);
+    }
+  }, [query, replaceQuery, workspacePath, useRegex, caseSensitive, fileFilter, doSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -115,6 +138,35 @@ export function SearchPanel() {
             )}
           </div>
         </div>
+        <div className="search-replace-row">
+          <button
+            className={`search-option-btn ${showReplace ? "active" : ""}`}
+            onClick={() => setShowReplace(!showReplace)}
+            title="Toggle Replace"
+          >
+            <Replace size={13} />
+          </button>
+          {showReplace && (
+            <div className="search-replace-input-wrapper">
+              <input
+                className="search-input search-replace-input"
+                placeholder="Replace..."
+                value={replaceQuery}
+                onChange={(e) => setReplaceQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") doReplace(); }}
+              />
+              <button
+                className="search-replace-btn"
+                onClick={doReplace}
+                disabled={!query.trim() || searchResults.length === 0}
+                title="Replace All"
+              >
+                Replace All
+              </button>
+            </div>
+          )}
+        </div>
+        {replaceMessage && <div className="search-replace-message">{replaceMessage}</div>}
         <div className="search-options">
           <button
             className={`search-option-btn ${caseSensitive ? "active" : ""}`}

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { RefreshCw, Eye } from "lucide-react";
+import { RefreshCw, Eye, Table } from "lucide-react";
 import type { PtyOutputEvent } from "../../types";
 import { PTY_SESSION_ID } from "../../constants";
+import { DataFrameViewer } from "./DataFrameViewer";
 
 interface WorkspaceVar {
   name: string;
@@ -40,6 +41,7 @@ export function VariableExplorer() {
   const [vars, setVars] = useState<WorkspaceVar[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [dfViewer, setDfViewer] = useState<string | null>(null);
   const captureRef = useRef(false);
   const bufferRef = useRef<string[]>([]);
 
@@ -106,6 +108,12 @@ export function VariableExplorer() {
     return () => { unlisten?.(); };
   }, []);
 
+  const isDataFrame = (type: string) => type === "DataFrame" || type.endsWith("DataFrame") || type.includes("DataFrame");
+
+  if (dfViewer) {
+    return <DataFrameViewer varName={dfViewer} onClose={() => setDfViewer(null)} />;
+  }
+
   return (
     <div className="variable-explorer">
       <div className="variable-explorer-header">
@@ -138,8 +146,16 @@ export function VariableExplorer() {
             <span className="var-col-value">Value</span>
           </div>
           {vars.map((v) => (
-            <div key={v.name} className="variable-row" title={`${v.name}: ${v.type} (${v.size} bytes)\n${v.summary}`}>
-              <span className="var-col-name var-name">{v.name}</span>
+            <div
+              key={v.name}
+              className={`variable-row ${isDataFrame(v.type) ? "variable-row-clickable" : ""}`}
+              title={`${v.name}: ${v.type} (${v.size} bytes)\n${v.summary}`}
+              onClick={() => isDataFrame(v.type) && setDfViewer(v.name)}
+            >
+              <span className="var-col-name var-name">
+                {isDataFrame(v.type) && <Table size={11} className="var-df-icon" />}
+                {v.name}
+              </span>
               <span className="var-col-type var-type">{v.type}</span>
               <span className="var-col-value var-value">{v.summary}</span>
             </div>

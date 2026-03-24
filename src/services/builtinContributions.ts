@@ -74,6 +74,11 @@ async function getComponent(name: string): Promise<React.ComponentType> {
       _componentCache[name] = m.PlotPane;
       return m.PlotPane;
     }
+    case "TestRunnerPanel": {
+      const m = await import("../components/TestRunner/TestRunnerPanel");
+      _componentCache[name] = m.TestRunnerPanel;
+      return m.TestRunnerPanel;
+    }
     default:
       throw new Error(`Unknown component: ${name}`);
   }
@@ -156,6 +161,7 @@ export async function registerBuiltinContributions() {
     PackageManager,
     ContainerLogsPanel,
     PlotPane,
+    TestRunnerPanel,
   ] = await Promise.all([
     getComponent("OutputPanel"),
     getComponent("TerminalPanel"),
@@ -163,6 +169,7 @@ export async function registerBuiltinContributions() {
     getComponent("PackageManager"),
     getComponent("ContainerLogsPanel"),
     getComponent("PlotPane"),
+    getComponent("TestRunnerPanel"),
   ]);
 
   store.registerBottomPanel({
@@ -204,6 +211,12 @@ export async function registerBuiltinContributions() {
     label: "Plots",
     order: 15,
     component: PlotPane,
+  });
+  store.registerBottomPanel({
+    id: "tests",
+    label: "Tests",
+    order: 35,
+    component: TestRunnerPanel,
   });
   store.registerBottomPanel({
     id: "container-logs",
@@ -540,6 +553,21 @@ function registerBuiltinCommands() {
     id: "plots.show",
     label: "Show Plot Pane",
     execute: () => ide().setActiveBottomPanel("plots"),
+  });
+
+  store.registerCommand({
+    id: "git.toggle-blame",
+    label: "Git: Toggle Inline Blame",
+    execute: () => {
+      const s = ide();
+      s.setBlameEnabled(!s.blameEnabled);
+    },
+  });
+
+  store.registerCommand({
+    id: "tests.show",
+    label: "Show Test Runner",
+    execute: () => ide().setActiveBottomPanel("tests"),
   });
 
   store.registerCommand({

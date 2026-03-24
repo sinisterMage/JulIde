@@ -32,6 +32,7 @@ interface IdeStore {
   setActiveTab: (id: string) => void;
   updateTabContent: (id: string, content: string, isDirty: boolean) => void;
   markTabSaved: (id: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
 
   // Split editor
   splitTabId: string | null;
@@ -94,6 +95,10 @@ interface IdeStore {
   cursorLine: number;
   cursorColumn: number;
   setCursorPosition: (line: number, column: number) => void;
+
+  // Git blame
+  blameEnabled: boolean;
+  setBlameEnabled: (v: boolean) => void;
 
   // Editor instance (for triggering actions like Find from outside)
   editorInstance: Monaco.editor.IStandaloneCodeEditor | null;
@@ -224,6 +229,11 @@ export const useIdeStore = create<IdeStore>()(
       set((s) => {
         const tab = s.openTabs.find((t) => t.id === id);
         if (tab) tab.isDirty = false;
+      }),
+    reorderTabs: (fromIndex, toIndex) =>
+      set((s) => {
+        const [tab] = s.openTabs.splice(fromIndex, 1);
+        s.openTabs.splice(toIndex, 0, tab);
       }),
 
     // Split editor
@@ -388,6 +398,13 @@ export const useIdeStore = create<IdeStore>()(
       set((s) => {
         s.cursorLine = line;
         s.cursorColumn = column;
+      }),
+
+    // Git blame
+    blameEnabled: false,
+    setBlameEnabled: (v) =>
+      set((s) => {
+        s.blameEnabled = v;
       }),
 
     // Editor instance

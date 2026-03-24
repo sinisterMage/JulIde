@@ -77,6 +77,7 @@ pub fn run() {
             pluto::pluto_stop,
             // Search
             search::fs_search_files,
+            search::fs_replace_in_files,
             // File watcher
             watcher::watcher_start,
             watcher::watcher_stop,
@@ -109,6 +110,7 @@ pub fn run() {
             git::git_pull,
             git::git_ahead_behind,
             git::git_show_file_at_head,
+            git::git_blame_file,
             // Git Auth
             git_auth::git_auth_save_token,
             git_auth::git_auth_get_token,
