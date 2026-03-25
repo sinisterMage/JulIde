@@ -23,6 +23,7 @@ Comprehensive technical documentation for julIDE — a Julia IDE built with Taur
 15. [Build & Distribution](#15-build--distribution)
 16. [Dev Container Support](#16-dev-container-support)
 17. [Plugin System](#17-plugin-system)
+18. [Known Limitations](#18-known-limitations)
 
 ---
 
@@ -169,18 +170,21 @@ App.tsx
 ├── ActivityBar
 ├── Sidebar (conditional)
 │   ├── FileExplorer
+│   ├── OutlinePanel
 │   ├── SearchPanel
+│   ├── VariableExplorer
 │   ├── GitPanel
-│   ├── ContainerPanel
-│   └── PluginPanel
+│   └── ContainerPanel
 ├── EditorSplitContainer
 │   ├── EditorTabs
 │   ├── Breadcrumb
 │   └── MonacoEditor
 ├── BottomPanel
 │   ├── OutputPanel
+│   ├── PlotPane
 │   ├── TerminalPanel
 │   ├── ProblemsPanel
+│   ├── TestRunnerPanel
 │   ├── DebugPanel
 │   ├── PackageManager
 │   └── ContainerLogsPanel
@@ -207,6 +211,7 @@ Two Zustand stores with Immer middleware:
 - `searchResults`, `searchQuery`, `isSearching` — Global search
 - `lspStatus`, `reviseEnabled`, `plutoStatus` — Service status
 - `editorInstance` — Monaco editor ref for triggering actions externally
+- `blameEnabled` — Git blame annotation toggle
 - `commandPaletteOpen`, `quickOpenOpen` — Overlay visibility
 - `containerState`, `containerMode`, `containerId`, `containerName`, `containerRuntime` — Container runtime
 - `devcontainerDetected`, `devcontainerConfig`, `containerLogs` — Dev container state
@@ -357,6 +362,7 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `dialog_open_file` | `fs.rs` | Native file open dialog |
 | `dialog_open_folder` | `fs.rs` | Native folder open dialog |
 | `dialog_save_file` | `fs.rs` | Native file save dialog |
+| `dialog_pick_executable` | `fs.rs` | Native file picker dialog for executables |
 | `julia_get_version` | `julia.rs` | Get Julia version string |
 | `julia_list_environments` | `julia.rs` | List available Julia environments |
 | `julia_run` | `julia.rs` | Run a Julia script file |
@@ -364,6 +370,8 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `julia_clean` | `julia.rs` | Remove Manifest.toml and cache |
 | `julia_kill` | `julia.rs` | Kill running Julia process |
 | `julia_set_path` | `julia.rs` | Manually set Julia binary path |
+| `julia_eval` | `julia.rs` | Evaluate arbitrary Julia code in a workspace context |
+| `julia_set_path` | `julia.rs` | Manually override the Julia binary path |
 | `julia_pkg_add` | `julia.rs` | Add a Julia package via Pkg.jl |
 | `julia_pkg_rm` | `julia.rs` | Remove a Julia package via Pkg.jl |
 | `pty_create` | `pty.rs` | Create a new PTY terminal session |
@@ -407,6 +415,8 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `git_push` | `git.rs` | Push a branch to a remote |
 | `git_pull` | `git.rs` | Pull (fetch + merge) from a remote |
 | `git_ahead_behind` | `git.rs` | Count commits ahead/behind upstream |
+| `git_show_file_at_head` | `git.rs` | Get file contents at HEAD (used by diff viewer) |
+| `git_blame_file` | `git.rs` | Get per-line blame information for a file |
 | `git_auth_save_token` | `git_auth.rs` | Store a PAT in the OS keychain |
 | `git_auth_get_token` | `git_auth.rs` | Retrieve a stored PAT |
 | `git_auth_remove_token` | `git_auth.rs` | Remove a stored PAT |
@@ -443,6 +453,7 @@ const unlisten = await listen<PayloadType>("event-name", (event) => {
 | `container_pty_create` | `container.rs` | Create a PTY session inside a container |
 | `container_julia_run` | `container.rs` | Run a Julia script inside the container |
 | `fs_search_files` | `search.rs` | Search file contents across workspace |
+| `fs_replace_in_files` | `search.rs` | Replace matched text across workspace files |
 | `watcher_start` | `watcher.rs` | Start watching workspace for changes |
 | `watcher_stop` | `watcher.rs` | Stop file watching |
 | `settings_load` | `settings.rs` | Load settings from disk |
@@ -485,6 +496,8 @@ Monaco Editor (frontend)
 | Diagnostics | `textDocument/publishDiagnostics` | Markers via `setMonacoMarkers` |
 | Document Symbols | `textDocument/documentSymbol` | Available via `LspClient` |
 | Workspace Symbols | `workspace/symbol` | Available via `LspClient` |
+| Inlay Hints | `textDocument/inlayHint` | `InlayHintsProvider` |
+| Semantic Tokens | `textDocument/semanticTokens/full` | `DocumentSemanticTokensProvider` |
 
 ### Document Lifecycle
 
@@ -524,6 +537,14 @@ The MIME helper (`_JulIDEMIMEDisplay_`) intercepts rich display calls and emits 
 - `julia_pkg_rm(packageName, projectPath)` → spawns `julia -e 'using Pkg; Pkg.rm("X")'`
 
 Output is streamed via `julia-output` events. The PackageManager component listens for the `done` event to refresh the package list.
+
+### Code Cell Execution
+
+Julia files can contain code cells separated by `##` comment markers. Each `##` line defines a cell boundary. Pressing `Ctrl/Cmd+Enter` executes the current cell (the cell containing the cursor). Cell boundaries are shown with visual decorations in the editor gutter, and results are displayed inline and streamed to the Output panel.
+
+### Julia Evaluation
+
+`julia_eval` allows evaluating arbitrary Julia code strings in a workspace context. This is used internally by the Variable Explorer (to capture workspace variable state) and the Test Runner (to execute tests).
 
 ---
 
@@ -615,6 +636,9 @@ All git operations use the `git2` Rust crate (libgit2 bindings) — no shell dep
 - **GitIssuesTab** — browse and create issues.
 - **GitAuthSettings** — configure PAT tokens per provider.
 - **StatusBar** displays the current branch name and ahead/behind counts.
+- **DiffViewer** — side-by-side diff editor using Monaco DiffEditor (shows original at HEAD vs. modified working copy).
+- **Git blame** — inline blame annotations toggled from command palette (`git.toggle-blame`), showing author, date, and commit summary per line.
+- **Merge conflict resolution** — detects `<<<<<<<`/`=======`/`>>>>>>>` conflict markers and provides "Accept Current", "Accept Incoming", "Accept Both" action buttons inline.
 - Stage/unstage buttons appear on hover over each file.
 
 ### Git Provider Integration (GitHub / GitLab / Gitea)
@@ -700,7 +724,9 @@ The IDE supports browsing PRs, issues, and CI status for repositories hosted on 
   "gpuPassthrough": false,
   "selinuxLabel": true,
   "persistJuliaPackages": true,
-  "plutoPort": 3000
+  "plutoPort": 3000,
+  "juliaPath": "",
+  "startMaximized": true
 }
 ```
 
@@ -913,3 +939,26 @@ Plugin Discovery (pluginHost.ts)
 | `plugin_get_dir` | Returns the plugins directory path (creates it if missing) |
 | `plugin_scan` | Scans for plugins and returns their manifests |
 | `plugin_read_entry` | Reads the JavaScript entry point of a plugin |
+
+---
+
+## 18. Known Limitations
+
+### Wayland compatibility
+
+`bun run tauri dev` may show a blank/white window or crash on certain Wayland setups. This is an upstream issue in the WebKitGTK / wry rendering layer used by Tauri, not a julIDE bug. It primarily affects systems running NVIDIA proprietary drivers under Wayland, where the DMA-BUF renderer fails to allocate GPU buffers. Some tiling Wayland compositors (e.g. Hyprland, Sway) are also known to be affected.
+
+**Workarounds:**
+- Disable the DMA-BUF renderer to fall back to shared memory buffers:
+  ```bash
+  WEBKIT_DISABLE_DMABUF_RENDERER=1 bun run tauri dev
+  ```
+- Alternatively, force X11 mode:
+  ```bash
+  GDK_BACKEND=x11 bun run tauri dev
+  ```
+- Production builds (`bun run tauri build`) are generally unaffected.
+
+See [tauri-apps/tauri#9394](https://github.com/tauri-apps/tauri/issues/9394) for upstream tracking.
+
+This limitation does not apply to macOS or Windows.

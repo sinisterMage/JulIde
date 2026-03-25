@@ -105,16 +105,20 @@ src/                          # Frontend (React + TypeScript)
 │   ├── Debugger/              # Debug panel (variables, call stack)
 │   ├── Editor/                # MonacoEditor, EditorTabs, Breadcrumb, etc.
 │   ├── FileExplorer/          # File tree with drag-and-drop
-│   ├── Git/                   # Source control panel with PRs/Issues tabs
+│   ├── Git/                   # Source control panel, diff viewer, PRs/Issues tabs
+│   ├── Outline/               # LSP document symbol outline sidebar panel
 │   ├── OutputPanel/           # Script output with MIME rendering
 │   ├── PackageManager/        # Julia package management UI
+│   ├── PlotPane/              # Plot output gallery (bottom panel)
 │   ├── Plugin/                # Plugin management panel
 │   ├── QuickOpen/             # Fuzzy file finder (Cmd+P)
 │   ├── SearchPanel/           # Global file search (Cmd+Shift+F)
 │   ├── Settings/              # Preferences panel
 │   ├── StatusBar/             # Bottom status indicators
 │   ├── Terminal/              # Multi-terminal with xterm.js
+│   ├── TestRunner/            # Julia test execution with @testset result parsing
 │   ├── Toolbar/               # Run, debug, Revise, Pluto buttons
+│   ├── Variables/             # Variable explorer with DataFrame viewer
 │   └── Welcome/               # Welcome screen with recent projects
 ├── stores/                   # Zustand state stores
 │   ├── useIdeStore.ts        # Main IDE state (tabs, panels, workspace, container, git)

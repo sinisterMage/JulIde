@@ -31,6 +31,9 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 - **Autocompletion**, **hover documentation**, **go-to-definition**, **find references**
 - **Signature help** with parameter info
 - **Real-time diagnostics** (errors and warnings) shown inline and in the Problems panel
+- **Error lens** — inline diagnostic messages displayed at the end of each line
+- **InlayHints** — type and parameter hints displayed inline in the editor
+- **Semantic tokens** — rich semantic highlighting beyond syntax-level tokenization
 - **Workspace and document symbol search**
 
 ### Julia Runtime
@@ -38,6 +41,8 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 - **Interactive REPL** via xterm.js with full PTY emulation
 - **Multi-terminal support** — create, switch, and close multiple Julia REPL sessions
 - **Debugger** integration via [Debugger.jl](https://github.com/JuliaDebug/Debugger.jl) — breakpoints, step-through, variable inspection, call stack
+- **Code cell execution** — `##` markers create code cells; `Ctrl/Cmd+Enter` runs the current cell with inline results
+- **Variable Explorer** — workspace variable introspection via the REPL with DataFrame viewer support
 - **Revise.jl** toggle for hot-reload development
 - **Pluto.jl** reactive notebook support — open `.jl` files as Pluto notebooks in a native window
 - **Package Manager** — add and remove packages via `Pkg.jl` directly from the UI
@@ -61,15 +66,22 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 - **Ahead/Behind tracking** — see how far your branch is from the upstream
 - **GitHub / GitLab / Gitea** provider integration — browse PRs, issues, and CI status directly in the IDE
 - **Auth settings** — store personal access tokens securely via the OS keychain
+- **Git blame** — toggle inline blame annotations showing author, date, and commit summary per line
+- **Diff viewer** — side-by-side diff view using Monaco DiffEditor
+- **Merge conflict resolution** — detects conflict markers and provides "Accept Current", "Accept Incoming", and "Accept Both" action buttons inline
 - Powered by `libgit2` (via the `git2` Rust crate) — no shell dependency for core operations
 
 ### Workspace & UI
-- **Activity bar** — switch between Explorer, Search, Git, Container, and Plugin views
-- **Command palette** (Cmd/Ctrl+Shift+P) with 15+ commands
+- **Activity bar** — switch between Explorer, Outline, Search, Variables, Source Control, and Dev Containers views
+- **Command palette** (Cmd/Ctrl+Shift+P) with 35+ commands
 - **Settings panel** (Cmd/Ctrl+,) — configure editor, terminal, and appearance
 - **Theme support** — Dark and Light themes with full CSS variable system
 - **Welcome screen** with recent projects on startup
 - **Resizable panels** — sidebar and bottom panel with drag handles
+- **Outline panel** — LSP-powered document symbol tree in the sidebar (functions, structs, modules, etc.)
+- **Variable Explorer** — workspace variable introspection in the sidebar with DataFrame viewer
+- **Plot Pane** — image gallery in the bottom panel for plot output (PNG, JPEG, SVG, HTML)
+- **Test Runner** — runs `Pkg.test()` and parses `@testset` results in the bottom panel
 - **Status bar** — Julia version, environment, git branch, LSP status, Revise/Pluto indicators
 
 ### Dev Container Support
@@ -152,16 +164,20 @@ julIDE
 │   │   ├── Editor/             # Monaco editor, tabs, breadcrumb, split view
 │   │   ├── FileExplorer/       # File tree with drag-and-drop
 │   │   ├── Container/           # Dev container management panel and logs
-│   │   ├── Git/                # Source control panel
+│   │   ├── Git/                # Source control panel, diff viewer
+│   │   ├── Outline/            # LSP document symbol outline
 │   │   ├── OutputPanel/        # Script output with MIME rendering
 │   │   ├── PackageManager/     # Julia package management UI
+│   │   ├── PlotPane/           # Plot output gallery
 │   │   ├── Plugin/             # Plugin management panel
 │   │   ├── QuickOpen/          # Fuzzy file finder (Cmd+P)
 │   │   ├── SearchPanel/        # Global file search (Cmd+Shift+F)
 │   │   ├── Settings/           # Preferences panel
 │   │   ├── StatusBar/          # Bottom status indicators
 │   │   ├── Terminal/           # Multi-terminal with xterm.js
+│   │   ├── TestRunner/         # Test execution with result parsing
 │   │   ├── Toolbar/            # Run, debug, Revise, Pluto buttons
+│   │   ├── Variables/          # Variable explorer with DataFrame viewer
 │   │   └── Welcome/            # Welcome screen with recent projects
 │   ├── lsp/                    # LSP client and Monaco providers
 │   ├── services/               # Keybinding service, plugin host, builtin contributions
@@ -229,6 +245,8 @@ julIDE
 | `Cmd/Ctrl+Shift+F` | Search across files |
 | `Cmd/Ctrl+S` | Save file |
 | `` Ctrl+` `` | Toggle terminal |
+| `Cmd/Ctrl+G` | Go to Line |
+| `Ctrl/Cmd+Enter` | Run code cell |
 | `Cmd/Ctrl+,` | Open settings |
 
 ---
@@ -257,6 +275,8 @@ Available settings:
 | `selinuxLabel` | `true` | Apply SELinux labels to bind mounts |
 | `persistJuliaPackages` | `true` | Persist Julia packages across container rebuilds |
 | `plutoPort` | `3000` | Port for the Pluto.jl notebook server |
+| `juliaPath` | `""` | Custom Julia binary path (overrides auto-detection) |
+| `startMaximized` | `true` | Start the window maximized |
 
 ---
 
@@ -264,13 +284,14 @@ Available settings:
 
 julIDE automatically finds Julia using these strategies (in order):
 
-1. `$JULIA_PATH` environment variable
-2. Login shell `which julia` lookup
-3. `~/.juliaup/bin/julia` (juliaup default)
-4. Common paths: `/opt/homebrew/bin/julia`, `/usr/local/bin/julia`, `/usr/bin/julia`
-5. macOS `/Applications/Julia*.app` bundles
+1. `juliaPath` setting (if set via Settings or the command palette "Set Julia Executable Path")
+2. `$JULIA_PATH` environment variable
+3. Login shell `which julia` lookup
+4. `~/.juliaup/bin/julia` (juliaup default)
+5. Common paths: `/opt/homebrew/bin/julia`, `/usr/local/bin/julia`, `/usr/bin/julia`
+6. macOS `/Applications/Julia*.app` bundles
 
-If Julia is not found, set the `JULIA_PATH` environment variable or use the command palette to set the path manually.
+If Julia is not found, use the command palette (`Cmd/Ctrl+Shift+P` → "Set Julia Executable Path") to pick a custom binary, or set the `JULIA_PATH` environment variable.
 
 ---
 
