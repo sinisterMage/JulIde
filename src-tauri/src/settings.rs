@@ -39,6 +39,10 @@ pub struct Settings {
     pub persist_julia_packages: bool,
     #[serde(default = "default_pluto_port")]
     pub pluto_port: u32,
+    #[serde(default)]
+    pub julia_path: String,
+    #[serde(default = "default_true")]
+    pub start_maximized: bool,
 }
 
 fn default_font_size() -> u32 { 14 }
@@ -71,6 +75,8 @@ impl Default for Settings {
             selinux_label: default_true(),
             persist_julia_packages: default_true(),
             pluto_port: default_pluto_port(),
+            julia_path: String::new(),
+            start_maximized: default_true(),
         }
     }
 }

@@ -43,6 +43,17 @@ pub async fn find_julia() -> Option<PathBuf> {
 }
 
 fn find_julia_impl() -> Option<PathBuf> {
+    // 0. Check settings-persisted julia_path (highest priority)
+    {
+        let settings = crate::settings::settings_load();
+        if !settings.julia_path.is_empty() {
+            let p = PathBuf::from(&settings.julia_path);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
     // 1. Explicit env var override
     if let Ok(path) = std::env::var("JULIA_PATH") {
         let p = PathBuf::from(&path);
@@ -648,6 +659,11 @@ pub async fn julia_eval(
 
 #[tauri::command]
 pub async fn julia_set_path(path: String) -> Result<(), String> {
+    if path.is_empty() {
+        let mut cached = JULIA_PATH.lock().await;
+        *cached = None;
+        return Ok(());
+    }
     let p = PathBuf::from(&path);
     if !p.exists() {
         return Err(format!("Path does not exist: {}", path));

@@ -20,6 +20,8 @@ export interface Settings {
   selinuxLabel: boolean;
   persistJuliaPackages: boolean;
   plutoPort: number;
+  juliaPath: string;
+  startMaximized: boolean;
 }
 
 interface SettingsStore {
@@ -49,6 +51,8 @@ const defaultSettings: Settings = {
   selinuxLabel: true,
   persistJuliaPackages: true,
   plutoPort: 3000,
+  juliaPath: "",
+  startMaximized: true,
 };
 
 export const useSettingsStore = create<SettingsStore>()(

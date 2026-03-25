@@ -341,6 +341,19 @@ function registerBuiltinCommands() {
   });
 
   store.registerCommand({
+    id: "julia.set-path",
+    label: "Set Julia Executable Path",
+    description: "Choose a custom Julia binary",
+    execute: async () => {
+      const path = await invoke<string | null>("dialog_pick_executable");
+      if (path) {
+        await settings().updateSettings({ juliaPath: path });
+        await invoke("julia_set_path", { path });
+      }
+    },
+  });
+
+  store.registerCommand({
     id: "panel.output",
     label: "Show Output Panel",
     execute: () => ide().setActiveBottomPanel("output"),

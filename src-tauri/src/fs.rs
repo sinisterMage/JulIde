@@ -124,6 +124,18 @@ pub async fn dialog_open_file(app: tauri::AppHandle) -> Result<Option<String>, S
 }
 
 #[tauri::command]
+pub async fn dialog_pick_executable(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let path = app
+        .dialog()
+        .file()
+        .set_title("Select Julia Executable")
+        .add_filter("All Files", &["*"])
+        .blocking_pick_file();
+    Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
 pub async fn dialog_open_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let path = app.dialog().file().blocking_pick_folder();

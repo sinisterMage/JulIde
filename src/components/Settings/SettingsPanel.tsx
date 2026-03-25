@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { PluginSettings } from "./PluginSettings";
 import { GitAuthSettings } from "../Git/GitAuthSettings";
@@ -137,9 +138,56 @@ export function SettingsPanel() {
                 <option value="julide-light">JulIDE Light</option>
               </select>
             </SettingRow>
+
+            <SettingRow label="Start Maximized">
+              <label className="settings-toggle">
+                <input
+                  type="checkbox"
+                  checked={settings.startMaximized}
+                  onChange={(e) => updateSettings({ startMaximized: e.target.checked })}
+                />
+                <span className="settings-toggle-label">
+                  {settings.startMaximized ? "Maximized" : "Windowed"}
+                </span>
+              </label>
+              <span className="settings-hint">
+                Takes effect on next launch
+              </span>
+            </SettingRow>
           </SettingsSection>
 
           <SettingsSection title="Julia">
+            <SettingRow label="Julia Executable Path">
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  className="settings-input"
+                  placeholder="Auto-detect"
+                  value={settings.juliaPath}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateSettings({ juliaPath: val });
+                    invoke("julia_set_path", { path: val }).catch(() => {});
+                  }}
+                />
+                <button
+                  className="settings-browse-btn"
+                  onClick={async () => {
+                    const path = await invoke<string | null>("dialog_pick_executable");
+                    if (path) {
+                      await updateSettings({ juliaPath: path });
+                      invoke("julia_set_path", { path }).catch(() => {});
+                    }
+                  }}
+                >
+                  Browse
+                </button>
+              </div>
+              <span className="settings-hint">
+                Leave empty to auto-detect
+              </span>
+            </SettingRow>
+
             <SettingRow label="Pluto Port">
               <input
                 type="number"

@@ -596,7 +596,8 @@ export function MonacoEditor() {
         options={{
           fontSize: settings.fontSize,
           fontFamily: settings.fontFamily,
-          fontLigatures: true,
+          fontLigatures: "'calt' on, 'ccmp' on, 'liga' on",
+          disableMonospaceOptimizations: true,
           lineNumbers: "on",
           minimap: { enabled: settings.minimapEnabled, scale: 1 },
           scrollBeyondLastLine: false,

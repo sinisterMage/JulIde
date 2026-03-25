@@ -17,6 +17,7 @@ mod settings;
 mod watcher;
 
 use julia::new_julia_state;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -26,6 +27,15 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(new_julia_state())
+        .setup(|app| {
+            let settings = crate::settings::settings_load();
+            if settings.start_maximized {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.maximize();
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             // File system
             fs::fs_get_tree,
@@ -37,6 +47,7 @@ pub fn run() {
             fs::fs_rename,
             fs::fs_exists,
             fs::dialog_open_file,
+            fs::dialog_pick_executable,
             fs::dialog_open_folder,
             fs::dialog_save_file,
             // Julia
