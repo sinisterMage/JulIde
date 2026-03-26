@@ -23,10 +23,31 @@ static PLUTO_STATE: Lazy<Arc<Mutex<PlutoState>>> =
 
 // ── URL extraction ────────────────────────────────────────────────────────────
 
+/// Strip ANSI escape sequences (colors, underline, etc.) from a string.
+/// Julia's @info macro wraps URLs in ANSI codes which break URL extraction.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip until we hit a letter (the terminator of the escape sequence)
+            for esc_c in chars.by_ref() {
+                if esc_c.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 fn extract_pluto_url(line: &str) -> Option<String> {
+    let clean = strip_ansi(line);
     for prefix in &["http://127.0.0.1:", "http://localhost:"] {
-        if let Some(start) = line.find(prefix) {
-            let rest = &line[start..];
+        if let Some(start) = clean.find(prefix) {
+            let rest = &clean[start..];
             let end = rest
                 .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
                 .unwrap_or(rest.len());
@@ -124,16 +145,28 @@ pub async fn pluto_open(
         state.process = Some(child);
     }
 
-    // Drain stdout silently (Pluto logs go to stderr via Julia's @info)
+    // Forward stdout to the output panel
+    let app_out = app.clone();
     tokio::spawn(async move {
         use tokio::io::AsyncBufReadExt;
         let mut lines = tokio::io::BufReader::new(stdout).lines();
-        while let Ok(Some(_)) = lines.next_line().await {}
+        while let Ok(Some(line)) = lines.next_line().await {
+            let clean = strip_ansi(&line);
+            if !clean.trim().is_empty() {
+                let _ = app_out.emit(
+                    "julia-output",
+                    crate::julia::JuliaOutputEvent {
+                        kind: "stdout".into(),
+                        text: clean,
+                        exit_code: None,
+                    },
+                );
+            }
+        }
     });
 
-    // Read stderr: find the server URL, then open a new Tauri window
+    // Read stderr: find the server URL and forward output
     let app_err = app.clone();
-    let notebook_name_err = notebook_name.clone();
     tokio::spawn(async move {
         use tokio::io::AsyncBufReadExt;
         let mut lines = tokio::io::BufReader::new(stderr).lines();
@@ -141,6 +174,20 @@ pub async fn pluto_open(
         let mut error_buf: Vec<String> = Vec::new();
 
         while let Ok(Some(line)) = lines.next_line().await {
+            let clean = strip_ansi(&line);
+
+            // Forward all stderr to the output panel for visibility
+            if !clean.trim().is_empty() {
+                let _ = app_err.emit(
+                    "julia-output",
+                    crate::julia::JuliaOutputEvent {
+                        kind: "stderr".into(),
+                        text: clean.clone(),
+                        exit_code: None,
+                    },
+                );
+            }
+
             if !url_found {
                 if let Some(url) = extract_pluto_url(&line) {
                     url_found = true;
@@ -151,19 +198,8 @@ pub async fn pluto_open(
                             message: Some(url.clone()),
                         },
                     );
-                    if let Ok(parsed) = url.parse::<tauri::Url>() {
-                        let label = format!("pluto-{}", uuid::Uuid::new_v4().simple());
-                        let _ = tauri::WebviewWindowBuilder::new(
-                            &app_err,
-                            label,
-                            tauri::WebviewUrl::External(parsed),
-                        )
-                        .title(format!("Pluto \u{2014} {}", notebook_name_err))
-                        .inner_size(1280.0, 800.0)
-                        .build();
-                    }
-                } else if line.to_lowercase().contains("error") {
-                    error_buf.push(line);
+                } else if clean.to_lowercase().contains("error") {
+                    error_buf.push(clean);
                 }
             }
         }

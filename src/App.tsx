@@ -138,14 +138,41 @@ export default function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mirror Rust pluto-status events into the store
+  // Mirror Rust pluto-status events into the store and open split view
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen<{ status: string; message?: string }>("pluto-status", (e) => {
-      setPlutoStatus(
-        e.payload.status as "off" | "starting" | "ready" | "error",
-        e.payload.message
-      );
+    listen<{ status: string; message?: string }>("pluto-status", async (e) => {
+      const status = e.payload.status as "off" | "starting" | "ready" | "error";
+      setPlutoStatus(status, e.payload.message);
+
+      if (status === "ready" && e.payload.message) {
+        const store = useIdeStore.getState();
+        store.openPlutoSplit(e.payload.message, store.plutoNotebookPath);
+
+        // Open the notebook file in the left editor pane
+        const nbPath = store.plutoNotebookPath;
+        if (nbPath) {
+          const existing = store.openTabs.find((t) => t.path === nbPath);
+          if (existing) {
+            store.setActiveTab(existing.id);
+          } else {
+            try {
+              const content = await invoke<string>("fs_read_file", { path: nbPath });
+              const name = nbPath.split(/[/\\]/).pop() ?? "notebook.jl";
+              store.openFile({
+                id: `${Date.now()}-${Math.random()}`,
+                path: nbPath,
+                name,
+                content,
+                isDirty: false,
+                language: "julia",
+              });
+            } catch {
+              // File may not exist yet (new notebook)
+            }
+          }
+        }
+      }
     }).then((fn) => {
       unlisten = fn;
     });

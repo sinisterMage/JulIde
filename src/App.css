@@ -1504,6 +1504,29 @@ button, input, select {
   border-bottom: 2px solid var(--accent);
 }
 
+/* Pluto split pane */
+.pluto-split-iframe {
+  width: 100%;
+  flex: 1;
+  border: none;
+  background: white;
+}
+.pluto-split-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+}
+.pluto-split-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 /* =========================================================
    GIT PANEL
    ========================================================= */

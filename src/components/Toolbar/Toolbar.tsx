@@ -134,6 +134,7 @@ export function Toolbar() {
 
   const handleOpenPluto = async () => {
     try {
+      useIdeStore.getState().setPlutoNotebookPath("");
       await invoke("pluto_open", {
         notebookPath: "",
         workspacePath: workspacePath ?? null,

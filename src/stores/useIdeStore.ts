@@ -131,7 +131,12 @@ interface IdeStore {
   // Pluto.jl
   plutoStatus: "off" | "starting" | "ready" | "error";
   plutoMessage: string | null;
+  plutoUrl: string | null;
+  plutoNotebookPath: string | null;
   setPlutoStatus: (status: "off" | "starting" | "ready" | "error", message?: string) => void;
+  setPlutoNotebookPath: (path: string | null) => void;
+  openPlutoSplit: (url: string, notebookPath: string | null) => void;
+  closePlutoSplit: () => void;
 
   // Container
   containerState: ContainerState;
@@ -463,10 +468,33 @@ export const useIdeStore = create<IdeStore>()(
     // Pluto.jl
     plutoStatus: "off",
     plutoMessage: null,
+    plutoUrl: null,
+    plutoNotebookPath: null,
     setPlutoStatus: (status, message) =>
       set((s) => {
         s.plutoStatus = status;
         s.plutoMessage = message ?? null;
+        if (status === "off" || status === "error") {
+          s.plutoUrl = null;
+        }
+      }),
+    setPlutoNotebookPath: (path) =>
+      set((s) => {
+        s.plutoNotebookPath = path;
+      }),
+    openPlutoSplit: (url, notebookPath) =>
+      set((s) => {
+        s.plutoUrl = url;
+        s.plutoNotebookPath = notebookPath;
+        s.splitEditorOpen = true;
+      }),
+    closePlutoSplit: () =>
+      set((s) => {
+        s.plutoUrl = null;
+        s.plutoNotebookPath = null;
+        if (!s.splitTabId) {
+          s.splitEditorOpen = false;
+        }
       }),
 
     // Container

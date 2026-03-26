@@ -1,4 +1,6 @@
 import { useCallback, useRef, useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { EditorTabs } from "./EditorTabs";
 import { Breadcrumb } from "./Breadcrumb";
 import { MonacoEditor } from "./MonacoEditor";
@@ -8,6 +10,8 @@ export function EditorSplitContainer() {
   const splitEditorOpen = useIdeStore((s) => s.splitEditorOpen);
   const splitTabId = useIdeStore((s) => s.splitTabId);
   const openTabs = useIdeStore((s) => s.openTabs);
+  const plutoUrl = useIdeStore((s) => s.plutoUrl);
+  const closePlutoSplit = useIdeStore((s) => s.closePlutoSplit);
 
   const splitTab = openTabs.find((t) => t.id === splitTabId) ?? null;
 
@@ -42,7 +46,15 @@ export function EditorSplitContainer() {
     };
   }, []);
 
-  if (!splitEditorOpen || !splitTab) {
+  const isPlutoSplit = !!plutoUrl;
+  const isSplitActive = isPlutoSplit || (splitEditorOpen && !!splitTab);
+
+  const handleClosePluto = useCallback(() => {
+    closePlutoSplit();
+    invoke("pluto_stop").catch(console.error);
+  }, [closePlutoSplit]);
+
+  if (!isSplitActive) {
     return (
       <>
         <EditorTabs />
@@ -65,11 +77,28 @@ export function EditorSplitContainer() {
       <div className="split-editor-handle" onMouseDown={onDragStart} />
       <div className="split-editor-pane" style={{ width: `${100 - splitWidth}%` }}>
         <div className="split-editor-tab-bar">
-          <span className="split-editor-tab active">{splitTab.name}</span>
+          {isPlutoSplit ? (
+            <>
+              <span className="split-editor-tab active">Pluto Notebook</span>
+              <button className="pluto-split-close" onClick={handleClosePluto} title="Close Pluto">
+                <X size={12} />
+              </button>
+            </>
+          ) : (
+            <span className="split-editor-tab active">{splitTab!.name}</span>
+          )}
         </div>
-        <div className="ide-editor-area">
-          <MonacoEditor key={`split-${splitTab.id}`} />
-        </div>
+        {isPlutoSplit ? (
+          <iframe
+            src={plutoUrl}
+            className="pluto-split-iframe"
+            title="Pluto Notebook"
+          />
+        ) : (
+          <div className="ide-editor-area">
+            <MonacoEditor key={`split-${splitTab!.id}`} />
+          </div>
+        )}
       </div>
     </div>
   );

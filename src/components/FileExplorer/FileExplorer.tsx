@@ -75,6 +75,7 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState(node.name);
   const [promptMode, setPromptMode] = useState<"file" | "folder" | null>(null);
+  const [plutoPromptMode, setPlutoPromptMode] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
   const handleClick = useCallback(() => {
@@ -107,6 +108,7 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
 
   const handleOpenAsPluto = () => {
     closeMenu();
+    useIdeStore.getState().setPlutoNotebookPath(node.path);
     const workspacePath = useIdeStore.getState().workspacePath;
     const plutoPort = useSettingsStore.getState().settings.plutoPort;
     invoke("pluto_open", {
@@ -131,6 +133,34 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
   const handleRename = () => {
     closeMenu();
     setRenaming(true);
+  };
+
+  const handleNewPlutoNotebook = () => {
+    closeMenu();
+    setExpanded(true);
+    setPlutoPromptMode(true);
+  };
+
+  const handlePlutoPromptConfirm = async (name: string) => {
+    setPlutoPromptMode(false);
+    const fileName = name.endsWith(".jl") ? name : `${name}.jl`;
+    const dir = node.is_dir ? node.path : node.path.replace(/[^/\\]+$/, "");
+    const sep = dir.endsWith("/") || dir.endsWith("\\") ? "" : "/";
+    const newPath = `${dir}${sep}${fileName}`;
+    try {
+      await invoke("fs_create_file", { path: newPath });
+      onRefresh();
+      useIdeStore.getState().setPlutoNotebookPath(newPath);
+      const workspacePath = useIdeStore.getState().workspacePath;
+      const plutoPort = useSettingsStore.getState().settings.plutoPort;
+      await invoke("pluto_open", {
+        notebookPath: newPath,
+        workspacePath: workspacePath ?? null,
+        port: plutoPort,
+      });
+    } catch (e) {
+      console.error("Failed to create Pluto notebook:", e);
+    }
   };
 
   const commitRename = async () => {
@@ -250,6 +280,15 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
           />
         </div>
       )}
+      {plutoPromptMode && (
+        <div style={{ paddingLeft: indentPx + 24 }}>
+          <InlinePrompt
+            placeholder="notebook.jl"
+            onConfirm={handlePlutoPromptConfirm}
+            onCancel={() => setPlutoPromptMode(false)}
+          />
+        </div>
+      )}
 
       {node.is_dir &&
         expanded &&
@@ -277,6 +316,9 @@ function FileTreeNode({ node, depth, onOpen, onRefresh }: FileTreeNodeProps) {
                 </button>
                 <button onClick={handleNewFolder}>
                   <FolderPlus size={13} /> New Folder
+                </button>
+                <button onClick={handleNewPlutoNotebook}>
+                  <BookOpen size={13} /> New Pluto Notebook
                 </button>
                 <div className="context-menu-separator" />
               </>
