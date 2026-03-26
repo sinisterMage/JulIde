@@ -70,9 +70,9 @@ interface IdeStore {
   setSidebarWidth: (w: number) => void;
 
   // Terminal sessions
-  terminalSessions: { id: string; name: string }[];
+  terminalSessions: { id: string; name: string; type?: "julia" | "shell" }[];
   activeTerminalId: string | null;
-  addTerminalSession: (session: { id: string; name: string }) => void;
+  addTerminalSession: (session: { id: string; name: string; type?: "julia" | "shell" }) => void;
   removeTerminalSession: (id: string) => void;
   setActiveTerminal: (id: string) => void;
 

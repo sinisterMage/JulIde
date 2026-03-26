@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { usePluginStore } from "../stores/usePluginStore";
 import { useIdeStore } from "../stores/useIdeStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import type { FileNode } from "../types";
+import { showInputDialog } from "../components/InputDialog/InputDialog";
+import { showBestieTemplateDialog } from "../components/BestieTemplateDialog/BestieTemplateDialog";
+import type { FileNode, JuliaOutputEvent } from "../types";
 
 // Lazy component imports — these are imported by the consumers (App.tsx) already,
 // but we reference them here to register sidebar/bottom panels.
@@ -350,6 +353,110 @@ function registerBuiltinCommands() {
         await settings().updateSettings({ juliaPath: path });
         await invoke("julia_set_path", { path });
       }
+    },
+  });
+
+  store.registerCommand({
+    id: "julia.new-project-pkgtemplates",
+    label: "Julia: New Project (PkgTemplates)",
+    description: "Create a new Julia package using PkgTemplates.jl",
+    execute: async () => {
+      const s = ide();
+
+      const parentDir = await invoke<string | null>("dialog_open_folder");
+      if (!parentDir) return;
+
+      const packageName = await showInputDialog({
+        title: "Package Name",
+        placeholder: "MyPackage",
+        validate: (v) =>
+          /^[A-Za-z][A-Za-z0-9]*$/.test(v)
+            ? null
+            : "Must start with a letter and contain only letters and digits",
+      });
+      if (!packageName) return;
+
+      const userName = await showInputDialog({
+        title: "Git Hosting Username",
+        placeholder: "your-github-username",
+        validate: (v) => (v.length > 0 ? null : "Username is required"),
+      });
+      if (!userName) return;
+
+      s.clearOutput();
+      s.setActiveBottomPanel("output");
+      s.appendOutput({ kind: "info", text: `Creating project "${packageName}" in ${parentDir}...` });
+
+      const unlisten = await listen<JuliaOutputEvent>("julia-output", async (event) => {
+        if (event.payload.kind === "done") {
+          unlisten();
+          if (event.payload.exit_code === 0) {
+            const projectPath = `${parentDir}/${packageName}`;
+            try {
+              const tree = await invoke<FileNode>("fs_get_tree", { path: projectPath });
+              ide().setWorkspace(projectPath, tree);
+            } catch (e) {
+              ide().appendOutput({ kind: "stderr", text: `Failed to open project: ${e}` });
+            }
+          }
+        }
+      });
+
+      await invoke("julia_create_project", {
+        packageName,
+        parentDir,
+        userName,
+      }).catch((e) => {
+        s.appendOutput({ kind: "stderr", text: String(e) });
+        unlisten();
+      });
+    },
+  });
+
+  store.registerCommand({
+    id: "julia.new-project-bestie",
+    label: "Julia: New Project (BestieTemplate)",
+    description: "Create a new Julia package using BestieTemplate.jl",
+    execute: async () => {
+      const s = ide();
+
+      const parentDir = await invoke<string | null>("dialog_open_folder");
+      if (!parentDir) return;
+
+      const data = await showBestieTemplateDialog();
+      if (!data) return;
+
+      s.clearOutput();
+      s.setActiveBottomPanel("output");
+      s.appendOutput({ kind: "info", text: `Creating project "${data.packageName}" with BestieTemplate in ${parentDir}...` });
+
+      const unlisten = await listen<JuliaOutputEvent>("julia-output", async (event) => {
+        if (event.payload.kind === "done") {
+          unlisten();
+          if (event.payload.exit_code === 0) {
+            const projectPath = `${parentDir}/${data.packageName}.jl`;
+            try {
+              const tree = await invoke<FileNode>("fs_get_tree", { path: projectPath });
+              ide().setWorkspace(projectPath, tree);
+            } catch (e) {
+              ide().appendOutput({ kind: "stderr", text: `Failed to open project: ${e}` });
+            }
+          }
+        }
+      });
+
+      await invoke("julia_create_project_bestie", {
+        parentDir,
+        packageName: data.packageName,
+        packageOwner: data.packageOwner,
+        authors: data.authors,
+        juliaMinVersion: data.juliaMinVersion,
+        license: data.license,
+        strategyLevel: data.strategyLevel,
+      }).catch((e) => {
+        s.appendOutput({ kind: "stderr", text: String(e) });
+        unlisten();
+      });
     },
   });
 

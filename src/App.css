@@ -1045,6 +1045,147 @@ button, input, select {
 }
 
 /* =========================================================
+   INPUT DIALOG
+   ========================================================= */
+.input-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+.input-dialog {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.input-dialog-title {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.input-dialog-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 12px 16px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+}
+.input-dialog-error {
+  padding: 4px 16px 0;
+  font-size: 11px;
+  color: var(--red, #e06c75);
+}
+.input-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+}
+.input-dialog-btn {
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.input-dialog-btn:hover {
+  background: var(--bg-hover);
+}
+.input-dialog-btn.primary {
+  background: var(--accent, #9558B2);
+  border-color: var(--accent, #9558B2);
+  color: #fff;
+}
+.input-dialog-btn.primary:hover {
+  opacity: 0.9;
+}
+
+/* =========================================================
+   BESTIE TEMPLATE DIALOG
+   ========================================================= */
+.bestie-dialog {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.bestie-dialog-title {
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.bestie-dialog-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+.bestie-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bestie-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.bestie-field-input,
+.bestie-field-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+}
+.bestie-field-input:focus,
+.bestie-field-select:focus {
+  border-color: var(--accent, #9558B2);
+}
+.bestie-field-select {
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.bestie-field-select option {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* =========================================================
    PROBLEMS PANEL
    ========================================================= */
 .problems-empty {

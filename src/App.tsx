@@ -7,6 +7,8 @@ import { StatusBar } from "./components/StatusBar/StatusBar";
 import { CommandPalette } from "./components/CommandPalette/CommandPalette";
 import { QuickOpen } from "./components/QuickOpen/QuickOpen";
 import { SettingsPanel } from "./components/Settings/SettingsPanel";
+import { InputDialog } from "./components/InputDialog/InputDialog";
+import { BestieTemplateDialog } from "./components/BestieTemplateDialog/BestieTemplateDialog";
 import { ActivityBar } from "./components/ActivityBar/ActivityBar";
 import { WelcomeScreen } from "./components/Welcome/WelcomeScreen";
 import { PluginPanel } from "./components/Plugin/PluginPanel";
@@ -408,6 +410,8 @@ export default function App() {
       <CommandPalette />
       <QuickOpen />
       <SettingsPanel />
+      <InputDialog />
+      <BestieTemplateDialog />
     </div>
   );
 }

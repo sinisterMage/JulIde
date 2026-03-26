@@ -576,6 +576,184 @@ pub async fn julia_pkg_rm(
     Ok(())
 }
 
+/// Create a new Julia project using PkgTemplates.jl.
+/// Auto-installs PkgTemplates if not already present.
+#[tauri::command]
+pub async fn julia_create_project(
+    app: tauri::AppHandle,
+    package_name: String,
+    parent_dir: String,
+    user_name: String,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    use tokio::io::AsyncBufReadExt;
+
+    let julia = find_julia()
+        .await
+        .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
+
+    let safe_dir = parent_dir.replace('\\', "/").replace('"', "\\\"");
+    let safe_name = package_name.replace('"', "\\\"");
+    let safe_user = user_name.replace('"', "\\\"");
+
+    let script = format!(
+        r#"try; using PkgTemplates; catch; using Pkg; Pkg.add("PkgTemplates"); using PkgTemplates; end; t = Template(; user="{user}", dir="{dir}"); t("{name}")"#,
+        user = safe_user,
+        dir = safe_dir,
+        name = safe_name,
+    );
+
+    let mut cmd = tokio::process::Command::new(&julia);
+    cmd.arg("-e").arg(&script);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    cmd.kill_on_drop(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let app_out = app.clone();
+    let app_err = app.clone();
+    let app_done = app.clone();
+
+    tokio::spawn(async move {
+        let reader = tokio::io::BufReader::new(stdout);
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+        }
+    });
+
+    tokio::spawn(async move {
+        let reader = tokio::io::BufReader::new(stderr);
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+        }
+    });
+
+    tokio::spawn(async move {
+        let status = child.wait().await;
+        let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+        let _ = app_done.emit("julia-output", JuliaOutputEvent { kind: "done".into(), text: String::new(), exit_code: Some(code) });
+    });
+
+    Ok(())
+}
+
+/// Create a new Julia project using BestieTemplate.jl.
+/// Runs non-interactively with a clean environment (no Tauri/Cargo vars)
+/// to avoid breaking pixi/CondaPkg.
+#[tauri::command]
+pub async fn julia_create_project_bestie(
+    app: tauri::AppHandle,
+    parent_dir: String,
+    package_name: String,
+    package_owner: String,
+    authors: String,
+    julia_min_version: String,
+    license: String,
+    strategy_level: u32,
+) -> Result<(), String> {
+    use tauri::Emitter;
+    use tokio::io::AsyncBufReadExt;
+
+    let julia = find_julia()
+        .await
+        .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
+
+    let dst_path = format!(
+        "{}/{}.jl",
+        parent_dir.replace('\\', "/").replace('"', "\\\""),
+        package_name.replace('"', "\\\"")
+    );
+
+    let script = format!(
+        r#"try; using BestieTemplate; catch; using Pkg; Pkg.add("BestieTemplate"); using BestieTemplate; end
+data = Dict(
+    "PackageName" => "{name}",
+    "PackageOwner" => "{owner}",
+    "Authors" => "{authors}",
+    "JuliaMinVersion" => "{julia_ver}",
+    "License" => "{license}",
+    "StrategyLevel" => {strategy},
+)
+BestieTemplate.generate("{dst}", data; defaults=true, quiet=false)"#,
+        name = package_name.replace('"', "\\\""),
+        owner = package_owner.replace('"', "\\\""),
+        authors = authors.replace('"', "\\\""),
+        julia_ver = julia_min_version.replace('"', "\\\""),
+        license = license.replace('"', "\\\""),
+        strategy = strategy_level,
+        dst = dst_path,
+    );
+
+    let mut cmd = tokio::process::Command::new(&julia);
+    // Start with a clean environment to avoid Tauri/Cargo vars
+    // breaking pixi/CondaPkg.
+    cmd.env_clear();
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.env("HOME", &home);
+    }
+    cmd.env("TERM", "xterm-256color");
+    // Get a clean PATH from the user's login shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    if let Ok(output) = std::process::Command::new(&shell)
+        .args(["-l", "-c", "echo $PATH"])
+        .output()
+    {
+        if output.status.success() {
+            let path_val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            cmd.env("PATH", &path_val);
+        }
+    }
+    cmd.arg("-e").arg(&script);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    cmd.kill_on_drop(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let app_out = app.clone();
+    let app_err = app.clone();
+    let app_done = app.clone();
+
+    tokio::spawn(async move {
+        let reader = tokio::io::BufReader::new(stdout);
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+        }
+    });
+
+    tokio::spawn(async move {
+        let reader = tokio::io::BufReader::new(stderr);
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+        }
+    });
+
+    tokio::spawn(async move {
+        let status = child.wait().await;
+        let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
+        let _ = app_done.emit("julia-output", JuliaOutputEvent { kind: "done".into(), text: String::new(), exit_code: Some(code) });
+    });
+
+    Ok(())
+}
+
 /// Evaluate a code snippet and capture output (for inline code cells).
 /// Like julia_run but takes code directly instead of a file path.
 #[tauri::command]

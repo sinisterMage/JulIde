@@ -116,6 +116,11 @@ export function TerminalPanel() {
               command: null,
               workingDir: null,
             });
+          } else if (session.type === "shell") {
+            await invoke("pty_create_shell", {
+              sessionId,
+              workingDir: workspacePath ?? null,
+            });
           } else {
             await invoke("pty_create", {
               sessionId,

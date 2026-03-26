@@ -108,6 +108,81 @@ pub async fn pty_create(
     Ok(())
 }
 
+/// Create a PTY running the user's login shell instead of Julia.
+/// Used for tasks like BestieTemplate that need a clean environment.
+#[tauri::command]
+pub async fn pty_create_shell(
+    app: tauri::AppHandle,
+    session_id: String,
+    working_dir: Option<String>,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+    let pty_system = portable_pty::native_pty_system();
+    let pair = pty_system
+        .openpty(portable_pty::PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| e.to_string())?;
+
+    // Use `env -i` to start with a completely clean environment,
+    // then launch a login shell which re-sources the user's profile.
+    let mut cmd = portable_pty::CommandBuilder::new("env");
+    cmd.args(["-i", &format!("TERM=xterm-256color")]);
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.arg(format!("HOME={}", home));
+    }
+    cmd.arg(&shell);
+    cmd.arg("-l");
+    if let Some(ref dir) = working_dir {
+        cmd.cwd(dir);
+    }
+
+    let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+
+    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+
+    {
+        let mut sessions = PTY_SESSIONS.lock().unwrap();
+        sessions.insert(
+            session_id.clone(),
+            PtySession {
+                writer,
+                master: pair.master,
+            },
+        );
+    }
+
+    let app_clone = app.clone();
+    let sid = session_id.clone();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 4096];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = app_clone.emit(
+                        "pty-output",
+                        PtyOutputEvent {
+                            session_id: sid.clone(),
+                            data,
+                        },
+                    );
+                }
+            }
+        }
+    });
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn pty_write(session_id: String, data: String) -> Result<(), String> {
     let mut sessions = PTY_SESSIONS.lock().unwrap();

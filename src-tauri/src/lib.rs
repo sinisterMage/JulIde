@@ -61,8 +61,11 @@ pub fn run() {
             julia::julia_set_path,
             julia::julia_pkg_add,
             julia::julia_pkg_rm,
+            julia::julia_create_project,
+            julia::julia_create_project_bestie,
             // PTY / Terminal
             pty::pty_create,
+            pty::pty_create_shell,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_close,
