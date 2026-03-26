@@ -225,7 +225,7 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
         let home = dirs_next::home_dir()
             .ok_or("Cannot determine home directory")?;
         let jetls_bin = if cfg!(windows) {
-            home.join(".julia").join("bin").join("jetls.exe")
+            home.join(".julia").join("bin").join("jetls.bat")
         } else {
             home.join(".julia").join("bin").join("jetls")
         };
