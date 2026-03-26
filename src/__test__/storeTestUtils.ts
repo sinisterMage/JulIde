@@ -44,6 +44,7 @@ export function resetAllStores(): void {
     },
     lspStatus: "off",
     lspErrorMessage: null,
+    lspBackend: "languageserver",
     editorInstance: null,
     commandPaletteOpen: false,
     quickOpenOpen: false,

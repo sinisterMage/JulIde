@@ -23,6 +23,7 @@ pub enum LspStatus {
 pub struct LspStatusEvent {
     pub status: LspStatus,
     pub message: Option<String>,
+    pub backend: Option<String>,
 }
 
 struct LspState {
@@ -31,6 +32,7 @@ struct LspState {
     pending: HashMap<u64, oneshot::Sender<Result<Value, String>>>,
     next_id: u64,
     status: LspStatus,
+    backend_name: String,
 }
 
 impl Default for LspState {
@@ -40,6 +42,7 @@ impl Default for LspState {
             pending: HashMap::new(),
             next_id: 1,
             status: LspStatus::Off,
+            backend_name: String::new(),
         }
     }
 }
@@ -49,9 +52,9 @@ static LSP_STATE: Lazy<Arc<Mutex<LspState>>> =
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn emit_status(app: &tauri::AppHandle, status: LspStatus, message: Option<String>) {
+fn emit_status(app: &tauri::AppHandle, status: LspStatus, message: Option<String>, backend: Option<String>) {
     use tauri::Emitter;
-    let _ = app.emit("lsp-status", LspStatusEvent { status, message });
+    let _ = app.emit("lsp-status", LspStatusEvent { status, message, backend });
 }
 
 async fn write_lsp_message(stdin_arc: &Arc<Mutex<ChildStdin>>, msg: &Value) -> Result<(), String> {
@@ -84,14 +87,17 @@ async fn read_lsp_stdout(
                     let mut s = state.lock().await;
                     s.status = LspStatus::Error;
                     s.stdin = None;
+                    let display_name = backend_display_name(&s.backend_name).to_string();
+                    let backend = s.backend_name.clone();
                     for (_, sender) in s.pending.drain() {
-                        let _ = sender.send(Err("LanguageServer.jl exited".to_string()));
+                        let _ = sender.send(Err(format!("{} exited", display_name)));
                     }
                     drop(s);
                     emit_status(
                         &app,
                         LspStatus::Error,
-                        Some("LanguageServer.jl exited unexpectedly".to_string()),
+                        Some(format!("{} exited unexpectedly", display_name)),
+                        Some(backend),
                     );
                     return;
                 }
@@ -99,11 +105,12 @@ async fn read_lsp_stdout(
                     let mut s = state.lock().await;
                     s.status = LspStatus::Error;
                     s.stdin = None;
+                    let backend = s.backend_name.clone();
                     for (_, sender) in s.pending.drain() {
                         let _ = sender.send(Err(e.to_string()));
                     }
                     drop(s);
-                    emit_status(&app, LspStatus::Error, Some(e.to_string()));
+                    emit_status(&app, LspStatus::Error, Some(e.to_string()), Some(backend));
                     return;
                 }
                 Ok(_) => {}
@@ -129,7 +136,9 @@ async fn read_lsp_stdout(
             let mut s = state.lock().await;
             s.status = LspStatus::Error;
             s.stdin = None;
-            emit_status(&app, LspStatus::Error, Some(e.to_string()));
+            let backend = s.backend_name.clone();
+            drop(s);
+            emit_status(&app, LspStatus::Error, Some(e.to_string()), Some(backend));
             return;
         }
 
@@ -163,8 +172,9 @@ async fn dispatch_message(msg: Value, state: &Arc<Mutex<LspState>>, app: &tauri:
         if s.status == LspStatus::Starting {
             if result.is_ok() {
                 s.status = LspStatus::Ready;
+                let backend = s.backend_name.clone();
                 drop(s);
-                emit_status(app, LspStatus::Ready, None);
+                emit_status(app, LspStatus::Ready, None, Some(backend));
                 // Re-lock to remove from pending
                 let mut s2 = state.lock().await;
                 if let Some(sender) = s2.pending.remove(&id) {
@@ -189,6 +199,13 @@ async fn dispatch_message(msg: Value, state: &Arc<Mutex<LspState>>, app: &tauri:
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
+fn backend_display_name(backend: &str) -> &str {
+    match backend {
+        "jetls" => "JETLS.jl",
+        _ => "LanguageServer.jl",
+    }
+}
+
 #[tauri::command]
 pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<(), String> {
     // Already running?
@@ -199,40 +216,92 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
         }
     }
 
-    let julia = crate::julia::find_julia()
-        .await
-        .ok_or("Julia not found. Install Julia or set JULIA_PATH.")?;
+    let settings = crate::settings::settings_load();
+    let backend = settings.lsp_backend.clone();
 
-    // Probe: check LanguageServer.jl is available
-    let mut probe_cmd = tokio::process::Command::new(&julia);
-    probe_cmd
-        .args([
+    // Build the LSP server command based on the chosen backend
+    let mut cmd = if backend == "jetls" {
+        // ── JETLS.jl ────────────────────────────────────────────────────
+        let home = dirs_next::home_dir()
+            .ok_or("Cannot determine home directory")?;
+        let jetls_bin = if cfg!(windows) {
+            home.join(".julia").join("bin").join("jetls.exe")
+        } else {
+            home.join(".julia").join("bin").join("jetls")
+        };
+
+        if !jetls_bin.exists() {
+            return Err(
+                "JETLS.jl is not installed. Install with: julia -e 'using Pkg; Pkg.Apps.add(; url=\"https://github.com/aviatesk/JETLS.jl\", rev=\"release\")'"
+                    .to_string(),
+            );
+        }
+
+        let mut c = tokio::process::Command::new(&jetls_bin);
+        c.args(["serve", "--stdio"]);
+        c
+    } else {
+        // ── LanguageServer.jl (default) ─────────────────────────────────
+        let julia = crate::julia::find_julia()
+            .await
+            .ok_or("Julia not found. Install Julia or set JULIA_PATH.")?;
+
+        // Probe: check LanguageServer.jl is available
+        let mut probe_cmd = tokio::process::Command::new(&julia);
+        probe_cmd
+            .args([
+                "--startup-file=no",
+                &format!("--project={}", workspace_path),
+                "-e",
+                "using LanguageServer; exit(0)",
+            ])
+            .env(
+                "JULIA_LOAD_PATH",
+                format!("{}:@v#.#:@stdlib", workspace_path),
+            )
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            probe_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let probe = probe_cmd
+            .status()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !probe.success() {
+            return Err(
+                "LanguageServer.jl is not installed. Run: julia -e 'using Pkg; Pkg.add(\"LanguageServer\")'"
+                    .to_string(),
+            );
+        }
+
+        let mut c = tokio::process::Command::new(&julia);
+        c.args([
             "--startup-file=no",
+            "--history-file=no",
             &format!("--project={}", workspace_path),
             "-e",
-            "using LanguageServer; exit(0)",
+            "using LanguageServer; runserver()",
         ])
         .env(
             "JULIA_LOAD_PATH",
             format!("{}:@v#.#:@stdlib", workspace_path),
-        )
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        );
+        c
+    };
+
+    // Common spawn configuration
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        probe_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-    let probe = probe_cmd
-        .status()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if !probe.success() {
-        return Err(
-            "LanguageServer.jl is not installed. Run: julia -e 'using Pkg; Pkg.add(\"LanguageServer\")'"
-                .to_string(),
-        );
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
     // Set status → Starting
@@ -242,31 +311,9 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
         s.pending.clear();
         s.next_id = 1;
         s.stdin = None;
+        s.backend_name = backend.clone();
     }
-    emit_status(&app, LspStatus::Starting, None);
-
-    // Spawn LanguageServer.jl
-    let mut cmd = tokio::process::Command::new(&julia);
-    cmd.args([
-        "--startup-file=no",
-        "--history-file=no",
-        &format!("--project={}", workspace_path),
-        "-e",
-        "using LanguageServer; runserver()",
-    ])
-    .env(
-        "JULIA_LOAD_PATH",
-        format!("{}:@v#.#:@stdlib", workspace_path),
-    )
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .kill_on_drop(true);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+    emit_status(&app, LspStatus::Starting, None, Some(backend.clone()));
 
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
     let child_stdin = child.stdin.take().unwrap();
@@ -288,6 +335,7 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
 
     // Stderr drain task — forward to Output panel so crashes are visible
     let app_stderr = app.clone();
+    let stderr_label = backend_display_name(&backend).to_string();
     tokio::spawn(async move {
         use tauri::Emitter;
         let mut reader = BufReader::new(child_stderr).lines();
@@ -296,7 +344,7 @@ pub async fn lsp_start(app: tauri::AppHandle, workspace_path: String) -> Result<
                 "julia-output",
                 crate::julia::JuliaOutputEvent {
                     kind: "stderr".into(),
-                    text: format!("[LSP] {}", line),
+                    text: format!("[{}] {}", stderr_label, line),
                     exit_code: None,
                 },
             );
@@ -319,8 +367,9 @@ pub async fn lsp_stop(app: tauri::AppHandle) -> Result<(), String> {
         let _ = sender.send(Err("LSP server stopped".to_string()));
     }
     s.status = LspStatus::Off;
+    s.backend_name.clear();
     drop(s);
-    emit_status(&app, LspStatus::Off, None);
+    emit_status(&app, LspStatus::Off, None, None);
     Ok(())
 }
 

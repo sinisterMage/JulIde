@@ -36,6 +36,7 @@ export default function App() {
   const activeSidebarView = useIdeStore((s) => s.activeSidebarView);
   const setActiveSidebarView = useIdeStore((s) => s.setActiveSidebarView);
   const setLspStatus = useIdeStore((s) => s.setLspStatus);
+  const setLspBackend = useIdeStore((s) => s.setLspBackend);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
 
   // Plugin store — dynamic panels
@@ -125,11 +126,14 @@ export default function App() {
   // Mirror Rust lsp-status events into the store
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen<{ status: string; message?: string }>("lsp-status", (e) => {
+    listen<{ status: string; message?: string; backend?: string }>("lsp-status", (e) => {
       setLspStatus(
         e.payload.status as "off" | "starting" | "ready" | "error",
         e.payload.message
       );
+      if (e.payload.backend) {
+        setLspBackend(e.payload.backend);
+      }
     }).then((fn) => {
       unlisten = fn;
     });

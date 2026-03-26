@@ -14,6 +14,7 @@ export function StatusBar() {
   const activeTabId = useIdeStore((s) => s.activeTabId);
   const lspStatus = useIdeStore((s) => s.lspStatus);
   const lspErrorMessage = useIdeStore((s) => s.lspErrorMessage);
+  const lspBackend = useIdeStore((s) => s.lspBackend);
   const reviseEnabled = useIdeStore((s) => s.reviseEnabled);
   const plutoStatus = useIdeStore((s) => s.plutoStatus);
   const plutoMessage = useIdeStore((s) => s.plutoMessage);
@@ -143,16 +144,19 @@ export function StatusBar() {
           title={
             lspStatus === "error"
               ? (lspErrorMessage ?? "LSP error")
-              : `Julia LSP: ${lspStatus}`
+              : `${lspBackend === "jetls" ? "JETLS.jl" : "LanguageServer.jl"}: ${lspStatus}`
           }
         >
-          {lspStatus === "off"
-            ? "LSP"
-            : lspStatus === "starting"
-            ? "LSP…"
-            : lspStatus === "ready"
-            ? "LSP ●"
-            : "LSP ✕"}
+          {(() => {
+            const label = lspBackend === "jetls" ? "JETLS" : "LSP";
+            return lspStatus === "off"
+              ? label
+              : lspStatus === "starting"
+              ? `${label}…`
+              : lspStatus === "ready"
+              ? `${label} ●`
+              : `${label} ✕`;
+          })()}
         </span>
       </div>
     </div>

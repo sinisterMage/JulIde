@@ -21,6 +21,7 @@ export interface Settings {
   persistJuliaPackages: boolean;
   plutoPort: number;
   juliaPath: string;
+  lspBackend: string;
   startMaximized: boolean;
 }
 
@@ -52,6 +53,7 @@ const defaultSettings: Settings = {
   persistJuliaPackages: true,
   plutoPort: 3000,
   juliaPath: "",
+  lspBackend: "languageserver",
   startMaximized: true,
 };
 

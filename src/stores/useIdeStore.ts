@@ -89,7 +89,9 @@ interface IdeStore {
   // LSP
   lspStatus: "off" | "starting" | "ready" | "error";
   lspErrorMessage: string | null;
+  lspBackend: string;
   setLspStatus: (status: "off" | "starting" | "ready" | "error", message?: string) => void;
+  setLspBackend: (backend: string) => void;
 
   // Cursor position
   cursorLine: number;
@@ -390,10 +392,15 @@ export const useIdeStore = create<IdeStore>()(
     // LSP
     lspStatus: "off",
     lspErrorMessage: null,
+    lspBackend: "languageserver",
     setLspStatus: (status, message) =>
       set((s) => {
         s.lspStatus = status;
         s.lspErrorMessage = message ?? null;
+      }),
+    setLspBackend: (backend) =>
+      set((s) => {
+        s.lspBackend = backend;
       }),
 
     // Cursor position

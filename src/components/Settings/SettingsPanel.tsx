@@ -157,6 +157,34 @@ export function SettingsPanel() {
           </SettingsSection>
 
           <SettingsSection title="Julia">
+            <SettingRow label="Language Server">
+              <select
+                className="settings-select"
+                value={settings.lspBackend}
+                onChange={(e) => updateSettings({ lspBackend: e.target.value })}
+              >
+                <option value="languageserver">LanguageServer.jl</option>
+                <option value="jetls">JETLS.jl (Experimental)</option>
+              </select>
+              <span className="settings-hint">
+                Requires LSP restart to take effect
+              </span>
+              {settings.lspBackend === "jetls" && (
+                <span className="settings-hint">
+                  JETLS.jl requires Julia 1.12.2+. See{" "}
+                  <a
+                    href="https://github.com/aviatesk/JETLS.jl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--accent)" }}
+                  >
+                    github.com/aviatesk/JETLS.jl
+                  </a>{" "}
+                  for installation instructions.
+                </span>
+              )}
+            </SettingRow>
+
             <SettingRow label="Julia Executable Path">
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 <input

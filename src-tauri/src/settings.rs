@@ -41,6 +41,8 @@ pub struct Settings {
     pub pluto_port: u32,
     #[serde(default)]
     pub julia_path: String,
+    #[serde(default = "default_lsp_backend")]
+    pub lsp_backend: String,
     #[serde(default = "default_true")]
     pub start_maximized: bool,
 }
@@ -54,6 +56,7 @@ fn default_word_wrap() -> String { "off".into() }
 fn default_theme() -> String { "julide-dark".into() }
 fn default_terminal_font_size() -> u32 { 13 }
 fn default_container_runtime() -> String { "auto".into() }
+fn default_lsp_backend() -> String { "languageserver".into() }
 
 impl Default for Settings {
     fn default() -> Self {
@@ -76,6 +79,7 @@ impl Default for Settings {
             persist_julia_packages: default_true(),
             pluto_port: default_pluto_port(),
             julia_path: String::new(),
+            lsp_backend: default_lsp_backend(),
             start_maximized: default_true(),
         }
     }
@@ -131,6 +135,7 @@ mod tests {
         assert_eq!(s.terminal_font_size, 13);
         assert_eq!(s.container_runtime, "auto");
         assert_eq!(s.pluto_port, 3000);
+        assert_eq!(s.lsp_backend, "languageserver");
         assert!(s.recent_workspaces.is_empty());
     }
 
