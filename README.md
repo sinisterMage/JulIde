@@ -10,7 +10,9 @@ A modern, fully-featured IDE for the [Julia](https://julialang.org/) programming
 ---
 ## Credits
 
-[@ Rakesh ](https://github.com/rakeshksr) - conributed a bug fix 🎉
+[@ Rakesh ](https://github.com/rakeshksr) - conributed multiple bug fixs and featue suggestions 🎉
+
+[@ RockyBeast](https://github.com/rokybeast) - contributed the new julIDE icons 🎉
 
 ---
 
