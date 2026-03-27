@@ -4,6 +4,51 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+// ── Input validation helpers (defense-in-depth) ───────────────────────
+
+/// Validate a Julia package name.
+/// Must start with a letter and contain only ASCII letters, digits, or underscores.
+fn validate_package_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Package name must not be empty".into());
+    }
+    let valid = name.starts_with(|c: char| c.is_ascii_alphabetic())
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !valid {
+        return Err(format!(
+            "Invalid package name '{}': must start with a letter and contain only ASCII letters, digits, or underscores",
+            name
+        ));
+    }
+    Ok(())
+}
+
+/// Validate that a path does not contain null bytes or ASCII control characters.
+fn validate_path(path: &str, label: &str) -> Result<(), String> {
+    if path.contains('\0') {
+        return Err(format!("{} must not contain null bytes", label));
+    }
+    if path.chars().any(|c| c.is_ascii_control() && c != '\t') {
+        return Err(format!("{} must not contain control characters", label));
+    }
+    Ok(())
+}
+
+/// Validate a general user string (username, author, etc.).
+/// Rejects empty strings, null bytes, and most control chars.
+fn validate_user_string(value: &str, label: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{} must not be empty", label));
+    }
+    if value.contains('\0') {
+        return Err(format!("{} must not contain null bytes", label));
+    }
+    if value.chars().any(|c| c.is_ascii_control() && c != '\n' && c != '\t') {
+        return Err(format!("{} must not contain control characters", label));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Default)]
 pub struct JuliaState {
     pub process_pid: Option<u32>,
@@ -270,15 +315,21 @@ pub async fn julia_run(
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
 
+    validate_path(&file_path, "File path")?;
+    if let Some(ref proj) = project_path {
+        validate_path(proj, "Project path")?;
+    }
+
     let julia = find_julia()
         .await
         .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
 
     // Build an inline script: MIME helper + include(user_file).
     // Using -e preserves @__FILE__ inside the included file.
-    let script = format!("{}\ninclude({:?})", MIME_HELPER, file_path);
+    let script = format!("{}\ninclude(ENV[\"JULIDE_FILE_PATH\"])", MIME_HELPER);
 
     let mut cmd = tokio::process::Command::new(&julia);
+    cmd.env("JULIDE_FILE_PATH", &file_path);
     if let Some(ref proj) = project_path {
         cmd.arg(format!("--project={}", proj));
     }
@@ -365,6 +416,10 @@ pub async fn julia_precompile(
 ) -> Result<(), String> {
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
+
+    if let Some(ref proj) = project_path {
+        validate_path(proj, "Project path")?;
+    }
 
     let julia = find_julia()
         .await
@@ -471,19 +526,25 @@ pub async fn julia_pkg_add(
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
 
+    validate_package_name(&package_name)?;
+    if let Some(ref proj) = project_path {
+        validate_path(proj, "Project path")?;
+    }
+
     let julia = find_julia()
         .await
         .ok_or_else(|| "Julia not found.".to_string())?;
 
-    let script = format!(r#"using Pkg; Pkg.add("{}")"#, package_name.replace('"', ""));
+    let script = r#"using Pkg; Pkg.add(ENV["JULIDE_PKG_NAME"])"#;
 
     let mut cmd = tokio::process::Command::new(&julia);
+    cmd.env("JULIDE_PKG_NAME", &package_name);
     if let Some(ref proj) = project_path {
         cmd.arg(format!("--project={}", proj));
     } else {
         cmd.arg("--project=@.");
     }
-    cmd.arg("-e").arg(&script);
+    cmd.arg("-e").arg(script);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -528,19 +589,25 @@ pub async fn julia_pkg_rm(
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
 
+    validate_package_name(&package_name)?;
+    if let Some(ref proj) = project_path {
+        validate_path(proj, "Project path")?;
+    }
+
     let julia = find_julia()
         .await
         .ok_or_else(|| "Julia not found.".to_string())?;
 
-    let script = format!(r#"using Pkg; Pkg.rm("{}")"#, package_name.replace('"', ""));
+    let script = r#"using Pkg; Pkg.rm(ENV["JULIDE_PKG_NAME"])"#;
 
     let mut cmd = tokio::process::Command::new(&julia);
+    cmd.env("JULIDE_PKG_NAME", &package_name);
     if let Some(ref proj) = project_path {
         cmd.arg(format!("--project={}", proj));
     } else {
         cmd.arg("--project=@.");
     }
-    cmd.arg("-e").arg(&script);
+    cmd.arg("-e").arg(script);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -588,23 +655,21 @@ pub async fn julia_create_project(
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
 
+    validate_package_name(&package_name)?;
+    validate_user_string(&user_name, "Username")?;
+    validate_path(&parent_dir, "Parent directory")?;
+
     let julia = find_julia()
         .await
         .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
 
-    let safe_dir = parent_dir.replace('\\', "/").replace('"', "\\\"");
-    let safe_name = package_name.replace('"', "\\\"");
-    let safe_user = user_name.replace('"', "\\\"");
-
-    let script = format!(
-        r#"try; using PkgTemplates; catch; using Pkg; Pkg.add("PkgTemplates"); using PkgTemplates; end; t = Template(; user="{user}", dir="{dir}"); t("{name}")"#,
-        user = safe_user,
-        dir = safe_dir,
-        name = safe_name,
-    );
+    let script = r#"try; using PkgTemplates; catch; using Pkg; Pkg.add("PkgTemplates"); using PkgTemplates; end; t = Template(; user=ENV["JULIDE_USER"], dir=ENV["JULIDE_DIR"]); t(ENV["JULIDE_NAME"])"#;
 
     let mut cmd = tokio::process::Command::new(&julia);
-    cmd.arg("-e").arg(&script);
+    cmd.env("JULIDE_USER", &user_name);
+    cmd.env("JULIDE_DIR", parent_dir.replace('\\', "/"));
+    cmd.env("JULIDE_NAME", &package_name);
+    cmd.arg("-e").arg(script);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
@@ -663,35 +728,33 @@ pub async fn julia_create_project_bestie(
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
 
+    validate_package_name(&package_name)?;
+    validate_user_string(&package_owner, "Package owner")?;
+    validate_user_string(&authors, "Authors")?;
+    validate_path(&parent_dir, "Parent directory")?;
+    if !julia_min_version.chars().all(|c| c.is_ascii_digit() || c == '.') {
+        return Err("Julia minimum version must contain only digits and dots".into());
+    }
+    const ALLOWED_LICENSES: &[&str] = &["MIT", "Apache-2.0", "GPL-3.0", "MPL-2.0"];
+    if !ALLOWED_LICENSES.contains(&license.as_str()) {
+        return Err(format!("Unknown license: {}", license));
+    }
+
     let julia = find_julia()
         .await
         .ok_or_else(|| "Julia not found. Install Julia or set JULIA_PATH.".to_string())?;
 
-    let dst_path = format!(
-        "{}/{}.jl",
-        parent_dir.replace('\\', "/").replace('"', "\\\""),
-        package_name.replace('"', "\\\"")
-    );
-
-    let script = format!(
-        r#"try; using BestieTemplate; catch; using Pkg; Pkg.add("BestieTemplate"); using BestieTemplate; end
+    let script = r#"try; using BestieTemplate; catch; using Pkg; Pkg.add("BestieTemplate"); using BestieTemplate; end
 data = Dict(
-    "PackageName" => "{name}",
-    "PackageOwner" => "{owner}",
-    "Authors" => "{authors}",
-    "JuliaMinVersion" => "{julia_ver}",
-    "License" => "{license}",
-    "StrategyLevel" => {strategy},
+    "PackageName" => ENV["JULIDE_PKG_NAME"],
+    "PackageOwner" => ENV["JULIDE_PKG_OWNER"],
+    "Authors" => ENV["JULIDE_AUTHORS"],
+    "JuliaMinVersion" => ENV["JULIDE_JULIA_VER"],
+    "License" => ENV["JULIDE_LICENSE"],
+    "StrategyLevel" => parse(Int, ENV["JULIDE_STRATEGY"]),
 )
-BestieTemplate.generate("{dst}", data; defaults=true, quiet=false)"#,
-        name = package_name.replace('"', "\\\""),
-        owner = package_owner.replace('"', "\\\""),
-        authors = authors.replace('"', "\\\""),
-        julia_ver = julia_min_version.replace('"', "\\\""),
-        license = license.replace('"', "\\\""),
-        strategy = strategy_level,
-        dst = dst_path,
-    );
+dst = joinpath(ENV["JULIDE_PARENT_DIR"], ENV["JULIDE_PKG_NAME"] * ".jl")
+BestieTemplate.generate(dst, data; defaults=true, quiet=false)"#;
 
     let mut cmd = tokio::process::Command::new(&julia);
     // Start with a clean environment to avoid Tauri/Cargo vars
@@ -712,7 +775,14 @@ BestieTemplate.generate("{dst}", data; defaults=true, quiet=false)"#,
             cmd.env("PATH", &path_val);
         }
     }
-    cmd.arg("-e").arg(&script);
+    cmd.env("JULIDE_PKG_NAME", &package_name);
+    cmd.env("JULIDE_PKG_OWNER", &package_owner);
+    cmd.env("JULIDE_AUTHORS", &authors);
+    cmd.env("JULIDE_JULIA_VER", &julia_min_version);
+    cmd.env("JULIDE_LICENSE", &license);
+    cmd.env("JULIDE_STRATEGY", strategy_level.to_string());
+    cmd.env("JULIDE_PARENT_DIR", parent_dir.replace('\\', "/"));
+    cmd.arg("-e").arg(script);
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
@@ -765,6 +835,10 @@ pub async fn julia_eval(
 ) -> Result<(), String> {
     use tauri::Emitter;
     use tokio::io::AsyncBufReadExt;
+
+    if let Some(ref proj) = project_path {
+        validate_path(proj, "Project path")?;
+    }
 
     let julia = find_julia()
         .await
@@ -849,4 +923,86 @@ pub async fn julia_set_path(path: String) -> Result<(), String> {
     let mut cached = JULIA_PATH.lock().await;
     *cached = Some(p);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── validate_package_name ──────────────────────────────────
+
+    #[test]
+    fn valid_package_names() {
+        assert!(validate_package_name("HTTP").is_ok());
+        assert!(validate_package_name("JSON3").is_ok());
+        assert!(validate_package_name("My_Package").is_ok());
+        assert!(validate_package_name("A").is_ok());
+        assert!(validate_package_name("DataFrames").is_ok());
+    }
+
+    #[test]
+    fn invalid_package_name_empty() {
+        assert!(validate_package_name("").is_err());
+    }
+
+    #[test]
+    fn invalid_package_name_starts_with_digit() {
+        assert!(validate_package_name("3DPlots").is_err());
+    }
+
+    #[test]
+    fn invalid_package_name_injection_attempts() {
+        assert!(validate_package_name(r#"pkg"); exit()"#).is_err());
+        assert!(validate_package_name("pkg\n; run(`id`)").is_err());
+        assert!(validate_package_name("$(run(`id`))").is_err());
+        assert!(validate_package_name("a b").is_err());
+        assert!(validate_package_name("a;b").is_err());
+        assert!(validate_package_name("a\\nb").is_err());
+        assert!(validate_package_name("a\"b").is_err());
+    }
+
+    // ── validate_path ──────────────────────────────────────────
+
+    #[test]
+    fn valid_paths() {
+        assert!(validate_path("/home/user/project", "test").is_ok());
+        assert!(validate_path("C:/Users/user/project", "test").is_ok());
+        assert!(validate_path("/tmp/path with spaces", "test").is_ok());
+        assert!(validate_path("/tmp/path\tok", "test").is_ok());
+    }
+
+    #[test]
+    fn path_with_null_byte() {
+        assert!(validate_path("/home/user\0/evil", "test").is_err());
+    }
+
+    #[test]
+    fn path_with_control_chars() {
+        assert!(validate_path("/home/user/\x01evil", "test").is_err());
+        assert!(validate_path("/home/\nevil", "test").is_err());
+    }
+
+    // ── validate_user_string ───────────────────────────────────
+
+    #[test]
+    fn valid_user_strings() {
+        assert!(validate_user_string("octocat", "test").is_ok());
+        assert!(validate_user_string("First Last <email@example.com>", "test").is_ok());
+        assert!(validate_user_string("line1\nline2", "test").is_ok());
+    }
+
+    #[test]
+    fn user_string_empty() {
+        assert!(validate_user_string("", "test").is_err());
+    }
+
+    #[test]
+    fn user_string_with_null() {
+        assert!(validate_user_string("user\0name", "test").is_err());
+    }
+
+    #[test]
+    fn user_string_with_control_chars() {
+        assert!(validate_user_string("user\x01name", "test").is_err());
+    }
 }
