@@ -14,7 +14,8 @@
     "test:rust": "cd src-tauri && cargo test",
     "test:all": "bun test && cd src-tauri && cargo test",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "generate:symbols": "bun run scripts/generate-latex-unicode.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

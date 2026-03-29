@@ -24,7 +24,7 @@
   --scrollbar: #424242;
   --scrollbar-hover: #5a5a5a;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "Noto Sans Mono", "Consolas", monospace;
   --toolbar-height: 40px;
   --statusbar-height: 24px;
   --tabs-height: 35px;
@@ -2571,7 +2571,7 @@ button, input, select {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Noto Sans Mono', monospace;
   font-size: 12px;
 }
 

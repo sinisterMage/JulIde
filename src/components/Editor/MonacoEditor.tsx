@@ -596,7 +596,7 @@ export function MonacoEditor() {
         options={{
           fontSize: settings.fontSize,
           fontFamily: settings.fontFamily,
-          fontLigatures: "'calt' on, 'ccmp' on, 'liga' on",
+          fontLigatures: "'calt' on, 'ccmp' on, 'liga' on, 'mark' on, 'mkmk' on",
           disableMonospaceOptimizations: true,
           lineNumbers: "on",
           minimap: { enabled: settings.minimapEnabled, scale: 1 },
@@ -616,6 +616,11 @@ export function MonacoEditor() {
             indentation: true,
           },
           stickyScroll: { enabled: true },
+          unicodeHighlight: {
+            ambiguousCharacters: false,
+            invisibleCharacters: false,
+            nonBasicASCII: false,
+          },
           padding: { top: 8, bottom: 8 },
         }}
       />

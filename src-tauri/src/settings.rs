@@ -49,7 +49,7 @@ pub struct Settings {
 
 fn default_font_size() -> u32 { 14 }
 fn default_pluto_port() -> u32 { 3000 }
-fn default_font_family() -> String { "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace".into() }
+fn default_font_family() -> String { "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Noto Sans Mono', monospace".into() }
 fn default_tab_size() -> u32 { 4 }
 fn default_true() -> bool { true }
 fn default_word_wrap() -> String { "off".into() }

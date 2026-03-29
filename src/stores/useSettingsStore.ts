@@ -36,7 +36,7 @@ interface SettingsStore {
 
 const defaultSettings: Settings = {
   fontSize: 14,
-  fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+  fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Noto Sans Mono', monospace",
   tabSize: 4,
   minimapEnabled: true,
   wordWrap: "off",
