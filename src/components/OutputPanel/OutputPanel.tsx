@@ -3,22 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Trash2 } from "lucide-react";
 import { useIdeStore } from "../../stores/useIdeStore";
 import type { JuliaOutputEvent } from "../../types";
-
-const MIME_MARKER = "%%JULIDE_MIME%%";
-
-function parseMimeLine(text: string): { type: string; data: string } | null {
-  if (!text.startsWith(MIME_MARKER) || !text.endsWith("%%")) return null;
-  try {
-    const json = text.slice(MIME_MARKER.length, -2);
-    const parsed = JSON.parse(json) as { type: string; data: string };
-    if (typeof parsed.type === "string" && typeof parsed.data === "string") {
-      return parsed;
-    }
-  } catch {
-    // Not a valid MIME line
-  }
-  return null;
-}
+import { parseMimeLine } from "../../utils/juliaOutput";
 
 export function OutputPanel() {
   const output = useIdeStore((s) => s.output);

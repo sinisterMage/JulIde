@@ -12,6 +12,7 @@ import { lspClient } from "../../lsp/LspClient";
 import { registerJuliaLspProviders, setMonacoInstance } from "../../lsp/juliaProviders";
 import { PTY_SESSION_ID } from "../../constants";
 import type { JuliaOutputEvent } from "../../types";
+import { stripAnsiForDisplay } from "../../utils/juliaOutput";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -215,8 +216,10 @@ export function MonacoEditor() {
           } else if (kind === "stderr" && text) {
             outputLines.push(text);
           } else if (kind === "done") {
-            // Show result inline
-            const resultText = outputLines.join("; ").slice(0, 120) || "(no output)";
+            // Show result inline (ANSI escapes are not rendered by Monaco widget text)
+            const resultText =
+              stripAnsiForDisplay(outputLines.join("; ").slice(0, 120)).trim() ||
+              "(no output)";
             if (cellResultDecoRef.current) {
               cellResultDecoRef.current.set([{
                 range: { startLineNumber: endLine, startColumn: 1, endLineNumber: endLine, endColumn: 1 },

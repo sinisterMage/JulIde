@@ -67,6 +67,16 @@ pub struct JuliaOutputEvent {
     pub exit_code: Option<i32>,
 }
 
+/// Tokio `lines()` leaves a trailing `\r` when the child uses CRLF (typical on Windows).
+/// Stripping it keeps `%%JULIDE_MIME%%…%%` detection and Monaco inline widgets correct.
+#[inline]
+pub(crate) fn normalize_julia_stdio_line(mut line: String) -> String {
+    while line.ends_with('\r') {
+        line.pop();
+    }
+    line
+}
+
 static JULIA_PATH: Lazy<Arc<Mutex<Option<PathBuf>>>> =
     Lazy::new(|| Arc::new(Mutex::new(None)));
 
@@ -365,7 +375,7 @@ pub async fn julia_run(
                 "julia-output",
                 JuliaOutputEvent {
                     kind: "stdout".into(),
-                    text: line,
+                    text: normalize_julia_stdio_line(line),
                     exit_code: None,
                 },
             );
@@ -380,7 +390,7 @@ pub async fn julia_run(
                 "julia-output",
                 JuliaOutputEvent {
                     kind: "stderr".into(),
-                    text: line,
+                    text: normalize_julia_stdio_line(line),
                     exit_code: None,
                 },
             );
@@ -446,7 +456,7 @@ pub async fn julia_precompile(
         let reader = tokio::io::BufReader::new(stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -454,7 +464,7 @@ pub async fn julia_precompile(
         let reader = tokio::io::BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -559,7 +569,7 @@ pub async fn julia_pkg_add(
         let reader = tokio::io::BufReader::new(stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -567,7 +577,7 @@ pub async fn julia_pkg_add(
         let reader = tokio::io::BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -622,7 +632,7 @@ pub async fn julia_pkg_rm(
         let reader = tokio::io::BufReader::new(stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -630,7 +640,7 @@ pub async fn julia_pkg_rm(
         let reader = tokio::io::BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -690,7 +700,7 @@ pub async fn julia_create_project(
         let reader = tokio::io::BufReader::new(stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -698,7 +708,7 @@ pub async fn julia_create_project(
         let reader = tokio::io::BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -842,7 +852,7 @@ BestieTemplate.generate(dst, data; defaults=true, quiet=false)"#;
         let reader = tokio::io::BufReader::new(stdout);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: line, exit_code: None });
+            let _ = app_out.emit("julia-output", JuliaOutputEvent { kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -850,7 +860,7 @@ BestieTemplate.generate(dst, data; defaults=true, quiet=false)"#;
         let reader = tokio::io::BufReader::new(stderr);
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
-            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: line, exit_code: None });
+            let _ = app_err.emit("julia-output", JuliaOutputEvent { kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None });
         }
     });
 
@@ -918,7 +928,7 @@ pub async fn julia_eval(
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
             let _ = app_out.emit("julia-output", JuliaOutputEvent {
-                kind: "stdout".into(), text: line, exit_code: None,
+                kind: "stdout".into(), text: normalize_julia_stdio_line(line), exit_code: None,
             });
         }
     });
@@ -928,7 +938,7 @@ pub async fn julia_eval(
         let mut lines = reader.lines();
         while let Ok(Some(line)) = lines.next_line().await {
             let _ = app_err.emit("julia-output", JuliaOutputEvent {
-                kind: "stderr".into(), text: line, exit_code: None,
+                kind: "stderr".into(), text: normalize_julia_stdio_line(line), exit_code: None,
             });
         }
     });
@@ -1043,5 +1053,14 @@ mod tests {
     #[test]
     fn user_string_with_control_chars() {
         assert!(validate_user_string("user\x01name", "test").is_err());
+    }
+
+    // ── normalize_julia_stdio_line ─────────────────────────────
+
+    #[test]
+    fn strips_trailing_cr_from_stdio_lines() {
+        assert_eq!(normalize_julia_stdio_line("hello\r".into()), "hello");
+        assert_eq!(normalize_julia_stdio_line("a\r\r".into()), "a");
+        assert_eq!(normalize_julia_stdio_line("no_cr".into()), "no_cr");
     }
 }

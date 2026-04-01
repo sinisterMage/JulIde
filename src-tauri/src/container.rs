@@ -1348,7 +1348,7 @@ pub async fn container_julia_run(
                     "julia-output",
                     crate::julia::JuliaOutputEvent {
                         kind: "stdout".into(),
-                        text: line,
+                        text: crate::julia::normalize_julia_stdio_line(line),
                         exit_code: None,
                     },
                 );
@@ -1366,7 +1366,7 @@ pub async fn container_julia_run(
                     "julia-output",
                     crate::julia::JuliaOutputEvent {
                         kind: "stderr".into(),
-                        text: line,
+                        text: crate::julia::normalize_julia_stdio_line(line),
                         exit_code: None,
                     },
                 );
