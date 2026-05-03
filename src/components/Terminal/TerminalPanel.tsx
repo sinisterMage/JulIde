@@ -211,6 +211,30 @@ export function TerminalPanel() {
     injectRevise(activeTerminalId, 500);
   }, [reviseEnabled, activeTerminalId]);
 
+  // Refit the active xterm when the bottom panel switches back to "terminal".
+  // While hidden via display:none the inner ResizeObserver doesn't fire, so
+  // xterm's renderer can be left at a stale (or zero) size.
+  const activeBottomPanel = useIdeStore((s) => s.activeBottomPanel);
+  useEffect(() => {
+    if (activeBottomPanel !== "terminal" || !activeTerminalId) return;
+    const inst = instancesRef.current.get(activeTerminalId);
+    if (!inst) return;
+    const t = setTimeout(() => {
+      try {
+        inst.fitAddon.fit();
+      } catch {
+        // fit() can throw if the container has no layout yet; ignore.
+      }
+      inst.terminal.focus();
+      invoke("pty_resize", {
+        sessionId: activeTerminalId,
+        rows: inst.terminal.rows,
+        cols: inst.terminal.cols,
+      }).catch(() => {});
+    }, 50);
+    return () => clearTimeout(t);
+  }, [activeBottomPanel, activeTerminalId]);
+
   return (
     <div className="terminal-panel">
       <div className="terminal-tabs-bar">

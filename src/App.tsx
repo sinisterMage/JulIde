@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useReducer } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Toolbar } from "./components/Toolbar/Toolbar";
@@ -341,8 +341,17 @@ export default function App() {
   // Find the active sidebar panel
   const activeSidebar = sidebarPanels.find((p) => p.id === activeSidebarView);
 
-  // Find the active bottom panel definition
-  const activeBottom = bottomPanels.find((p) => p.id === activeBottomPanel);
+  // Track which bottom panels have ever been activated so we can keep them
+  // mounted (hidden via display:none) instead of unmounting on tab switch.
+  // Preserves Terminal REPL state, scroll positions, etc.
+  const mountedBottomPanelsRef = useRef<Set<string>>(new Set());
+  const [, forceMountedTick] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    if (activeBottomPanel && !mountedBottomPanelsRef.current.has(activeBottomPanel)) {
+      mountedBottomPanelsRef.current.add(activeBottomPanel);
+      forceMountedTick();
+    }
+  }, [activeBottomPanel]);
 
   const currentTheme = useSettingsStore((s) => s.settings.theme);
   const themeClass = currentTheme === "julide-light" ? "theme-light" : "theme-dark";
@@ -417,17 +426,29 @@ export default function App() {
             ))}
           </div>
           <div className="bottom-panel-content">
-            {activeBottom ? (
-              activeBottom.id === "problems" ? (
-                <ProblemsPanel />
-              ) : (
-                <PluginPanel
-                  key={activeBottom.id}
-                  component={activeBottom.component}
-                  render={activeBottom.render}
-                />
-              )
-            ) : null}
+            {bottomPanels
+              .filter((panel) => mountedBottomPanelsRef.current.has(panel.id))
+              .map((panel) => (
+                <div
+                  key={panel.id}
+                  className="bottom-panel-slot"
+                  style={{
+                    display: panel.id === activeBottomPanel ? "flex" : "none",
+                    flexDirection: "column",
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  {panel.id === "problems" ? (
+                    <ProblemsPanel />
+                  ) : (
+                    <PluginPanel
+                      component={panel.component}
+                      render={panel.render}
+                    />
+                  )}
+                </div>
+              ))}
           </div>
         </div>
       </div>
